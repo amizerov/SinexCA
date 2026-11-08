@@ -1,0 +1,34 @@
+import {chromium} from "playwright-core";
+import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
+const baseURL=process.env.BASE_URL||"http://localhost:3002",browser=await chromium.launch({channel:"chrome",headless:true});
+try{
+  const context=await browser.newContext({viewport:{width:1440,height:900}}),remote=await browser.newContext(),stranger=await browser.newContext(),page=await context.newPage(),errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await context.routeWebSocket(/wss:\/\//,socket=>socket.close());
+  await context.route("**/api/market/**",async route=>{const path=new URL(route.request().url()).pathname;await route.fulfill({json:{data:path.endsWith("/pairs")?[{exchange:"binance",marketType:"spot",symbol:"BTCUSDT",baseAsset:"BTC",quoteAsset:"USDT"}]:[]}});});
+  await context.request.get(`${baseURL}/api/auth/session`);const email=`profile-${crypto.randomUUID()}@example.com`,oldPassword="Profile-old-password-123",newPassword="Profile-new-password-456";
+  const registered=await context.request.post(`${baseURL}/api/auth/register`,{data:{email,password:oldPassword}});assert.equal(registered.status(),200);const session=(await registered.json()).data,headers={"X-Workspace-Id":session.ownerId};
+  assert.equal((await remote.request.post(`${baseURL}/api/auth/login`,{data:{email,password:oldPassword}})).status(),200);
+  await page.goto(baseURL);await page.getByRole("button",{name:`Аккаунт ${email}`,exact:true}).click();await page.getByRole("menuitem",{name:"Профиль",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"Профиль",exact:true});await dialog.waitFor();
+  assert.equal(await dialog.getByText(/Google/).count(),0);assert.equal(await dialog.getByRole("button",{name:"Выйти",exact:true}).count(),0);
+  await page.getByRole("textbox",{name:"Имя в профиле"}).fill("Тестовый пользователь");await page.getByRole("button",{name:"Сохранить имя",exact:true}).click();await page.locator(".profile-notice").filter({hasText:"Имя сохранено"}).waitFor();assert.equal(await page.locator(".account-label").textContent(),"Тестовый пользователь");
+  const base64=await page.evaluate(()=>{const canvas=document.createElement("canvas");canvas.width=400;canvas.height=300;const ctx=canvas.getContext("2d");ctx.fillStyle="#b4ed8b";ctx.fillRect(0,0,400,300);ctx.fillStyle="#151e14";ctx.fillRect(100,50,150,150);return canvas.toDataURL("image/png").split(",")[1];});
+  const image={name:"avatar.png",mimeType:"image/png",buffer:Buffer.from(base64,"base64")};
+  await page.getByLabel("Файл аватара").setInputFiles(image);await page.locator(".profile-notice").filter({hasText:"Фото обновлено"}).waitFor();
+  await page.waitForFunction(()=>document.querySelector(".account-avatar-large img")?.naturalWidth===256);
+  const updated=(await(await context.request.get(`${baseURL}/api/auth/session`)).json()).data,avatar=updated.user.avatarUrl;
+  assert.ok(avatar.startsWith("/api/auth/avatar?"));const fetched=await context.request.get(baseURL+avatar);assert.equal(fetched.status(),200);assert.equal(fetched.headers()["content-type"],"image/png");assert.equal((await stranger.request.get(baseURL+avatar)).status(),404);
+  assert.equal((await context.request.post(`${baseURL}/api/auth/avatar`,{headers:{...headers,"Content-Type":"image/png"},data:Buffer.from("<svg onload='alert(1)'/>")})).status(),400);
+  assert.equal((await context.request.patch(`${baseURL}/api/auth/profile`,{headers:{...headers,Origin:"https://foreign.invalid"},data:{displayName:"Wrong"}})).status(),403);
+  await page.getByRole("button",{name:"Удалить аватар",exact:true}).click();await page.locator(".profile-notice").filter({hasText:"Фото удалено"}).waitFor();assert.equal(await page.locator(".account-avatar-large img").count(),0);assert.equal((await context.request.get(baseURL+avatar)).status(),404);
+  await page.getByLabel("Файл аватара").setInputFiles(image);await page.locator(".profile-notice").filter({hasText:"Фото обновлено"}).waitFor();
+  await page.locator(".profile-password summary").click();await page.getByLabel("Текущий пароль",{exact:true}).fill("wrong-password");await page.getByLabel("Новый пароль",{exact:true}).fill(newPassword);await page.getByLabel("Повторите новый пароль",{exact:true}).fill(newPassword);await page.getByRole("button",{name:"Сохранить пароль",exact:true}).click();await page.getByRole("alert").filter({hasText:"Текущий пароль указан неверно"}).waitFor();
+  await page.getByLabel("Текущий пароль",{exact:true}).fill(oldPassword);await page.getByRole("button",{name:"Сохранить пароль",exact:true}).click();await page.locator(".profile-notice").filter({hasText:"Пароль сохранён"}).waitFor();
+  assert.equal((await(await remote.request.get(`${baseURL}/api/auth/session`)).json()).data.user,null);
+  assert.equal((await remote.request.post(`${baseURL}/api/auth/login`,{data:{email,password:oldPassword}})).status(),401);assert.equal((await remote.request.post(`${baseURL}/api/auth/login`,{data:{email,password:newPassword}})).status(),200);
+  await page.setViewportSize({width:320,height:568});assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth));await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/profile-edit-mobile.png"});
+  await dialog.getByLabel("Переместить профиль",{exact:true}).focus();await page.keyboard.press("Escape");await dialog.waitFor({state:"hidden"});await page.locator(".account-button").click();assert.deepEqual((await page.getByRole("menuitem").allTextContents()),["Профиль","Аккаунт","Выйти"]);await page.getByRole("menuitem",{name:"Выйти",exact:true}).click();await page.getByRole("button",{name:"Войти в Sinex broker",exact:true}).waitFor();
+  assert.deepEqual(errors,[]);console.log("PASS profile name/photo upload/removal, private avatar, no Google controls, password verification/session rotation, mobile layout and third menu logout");
+}finally{await browser.close();}

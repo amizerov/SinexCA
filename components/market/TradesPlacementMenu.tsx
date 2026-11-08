@@ -1,0 +1,13 @@
+"use client";
+import {useEffect,useRef,useState,type KeyboardEvent} from "react";
+import {createPortal} from "react-dom";
+import {MoreHorizontal} from "lucide-react";
+import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
+import {usePanelDock} from "./PanelDock";
+export function TradesPlacementMenu(){
+  const {settings,update}=useWorkspacePreferences(),dock=usePanelDock(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null),[position,setPosition]=useState<{left:number;top:number}|null>(null);
+  const side=settings.tradesSide==="auto"?(settings.marketPanel.mode==="left"?"left":"right"):settings.tradesSide,mode=settings.tradesDocked?side:"floating";
+  useEffect(()=>{if(!position)return;menu.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();const outside=(e:PointerEvent)=>{if(!menu.current?.contains(e.target as Node)&&!trigger.current?.contains(e.target as Node))setPosition(null);};const resize=()=>setPosition(null);document.addEventListener("pointerdown",outside);window.addEventListener("resize",resize);return()=>{document.removeEventListener("pointerdown",outside);window.removeEventListener("resize",resize);};},[position]);
+  function keys(e:KeyboardEvent){if(e.key==="Escape"){e.stopPropagation();setPosition(null);trigger.current?.focus();return;}if(!["ArrowUp","ArrowDown","Home","End"].includes(e.key))return;e.preventDefault();const buttons=[...menu.current!.querySelectorAll<HTMLButtonElement>("button")],index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[e.key==="Home"?0:e.key==="End"?buttons.length-1:(index+(e.key==="ArrowDown"?1:-1)+buttons.length)%buttons.length]?.focus();}
+  return <><button ref={trigger} aria-label="Расположение сделок" aria-expanded={!!position} onClick={()=>{if(position){setPosition(null);return;}const r=trigger.current!.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.right-216,window.innerWidth-224)),top:Math.max(8,Math.min(r.bottom+4,window.innerHeight-170))});}}><MoreHorizontal size={15}/></button>{position&&createPortal(<div ref={menu} className="markets-placement-menu" role="menu" aria-label="Расположение сделок" style={position} onKeyDown={keys}>{([['right','Закрепить справа'],['left','Закрепить слева'],['floating','Плавающее окно']] as const).map(([value,label])=><button key={value} role="menuitemradio" aria-checked={value===mode} onClick={()=>{dock.place("trades",value);setPosition(null);}}>{label}</button>)}<button role="menuitem" onClick={()=>{update({tradesOpen:false});setPosition(null);}}>Скрыть сделки</button></div>,document.body)}</>;
+}

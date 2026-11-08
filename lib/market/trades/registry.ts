@@ -1,0 +1,16 @@
+import type {ExchangeId} from "../types";
+import type {TradeFactory} from "./types";
+import {binanceTrades} from "./binance";
+import {bybitTrades} from "./bybit";
+import {okxTrades} from "./okx";
+import {bitgetTrades} from "./bitget";
+import {gateTrades} from "./gate";
+import {krakenTrades} from "./kraken";
+import {coinbaseTrades} from "./coinbase";
+import {kucoinTrades} from "./kucoin";
+import {bitfinexTrades} from "./bitfinex";
+import {htxTrades} from "./htx";
+import {mexcTrades} from "./mexc";
+import {whitebitTrades} from "./whitebit";
+import {cryptocomTrades} from "./cryptocom";
+export const tradeFactories:Record<ExchangeId,TradeFactory>={binance:binanceTrades,bybit:bybitTrades,okx:okxTrades,bitget:bitgetTrades,gate:gateTrades,kraken:krakenTrades,coinbase:coinbaseTrades,kucoin:kucoinTrades,bitfinex:bitfinexTrades,htx:htxTrades,mexc:mexcTrades,whitebit:whitebitTrades,cryptocom:cryptocomTrades};

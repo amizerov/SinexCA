@@ -1,0 +1,2 @@
+import {record,tick,type TradeFactory} from "./types";
+export const gateTrades:TradeFactory=pairs=>({url:"wss://api.gateio.ws/ws/v4/",subscriptions:[{time:Math.floor(Date.now()/1000),channel:"spot.trades",event:"subscribe",payload:pairs.map(p=>p.symbol)}],ping:{time:Math.floor(Date.now()/1000),channel:"spot.ping"},decode(input){const event=record(input),item=record(event.result);return event.channel==="spot.trades"&&event.event==="update"?tick(item.currency_pair,item.price,item.create_time_ms,item.amount,item.side,item.id):[];}});

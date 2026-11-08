@@ -1,0 +1,17 @@
+import "server-only";
+import { binance } from "./binance";
+import { bybit } from "./bybit";
+import { okx } from "./okx";
+import { bitget } from "./bitget";
+import { gate } from "./gate";
+import { kraken } from "./kraken";
+import { coinbase } from "./coinbase";
+import { kucoin } from "./kucoin";
+import { bitfinex } from "./bitfinex";
+import { htx } from "./htx";
+import { mexc } from "./mexc";
+import { whitebit } from "./whitebit";
+import { cryptocom } from "./cryptocom";
+import type { ExchangeId } from "../types";
+import type { ExchangeAdapter } from "./adapter";
+export const exchangeRegistry: Record<ExchangeId, ExchangeAdapter> = { binance, bybit, okx, bitget, gate, kraken, coinbase, kucoin, bitfinex, htx, mexc, whitebit, cryptocom };

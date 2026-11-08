@@ -1,0 +1,46 @@
+import {chromium} from "playwright-core";
+import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
+const browser=await chromium.launch({channel:"chrome",headless:true}),baseURL=process.env.BASE_URL||"http://localhost:3002";
+try{
+  const context=await browser.newContext({viewport:{width:1440,height:900}}),page=await context.newPage(),errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await context.routeWebSocket(/wss:\/\//,socket=>socket.close());
+  await context.route("**/api/market/**",async route=>{
+    const url=new URL(route.request().url()),exchange=url.searchParams.get("exchange");let data=[];
+    if(url.pathname.endsWith("/pairs"))data=["BTC","ETH"].map(baseAsset=>({exchange,marketType:"spot",symbol:`${baseAsset}USDT`,baseAsset,quoteAsset:"USDT"}));
+    if(url.pathname.endsWith("/candles"))data=Array.from({length:500},(_,i)=>({time:1700000000+i*3600,open:100+i,high:102+i,low:99+i,close:101+i,volume:1}));
+    await route.fulfill({json:{data}});
+  });
+  const open=async()=>{await page.getByRole("button",{name:"Индикаторы",exact:true}).click();await page.getByRole("button",{name:"Применить",exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.indicator-dialog button[type="submit"]').disabled);};
+  const apply=async()=>{await page.getByRole("button",{name:"Применить",exact:true}).click();await page.locator(".indicator-dialog").waitFor({state:"hidden"});};
+  const choosePair=async asset=>{await page.locator("button.pair-row").filter({hasText:`${asset}/USDT`}).click();await page.locator(".asset-name h1").filter({hasText:asset}).waitFor();};
+  await page.goto(baseURL);await open();
+  assert.equal(await page.locator(".indicator-scope").count(),6);
+  await page.getByRole("checkbox",{name:"EMA 1",exact:true}).check();
+  await page.getByRole("checkbox",{name:"EMA 1: для всех",exact:true}).uncheck();
+  await page.getByRole("spinbutton",{name:"Период EMA 1",exact:true}).fill("42");
+  await page.getByRole("checkbox",{name:"EMA 2",exact:true}).check();await apply();
+  const first=(await(await context.request.get(`${baseURL}/api/indicators`)).json()).data;
+  assert.equal(first.settings.ema[0].enabled,false);assert.equal(first.settings.ema[1].enabled,true);
+  assert.equal(first.overrides[JSON.stringify(["binance","spot","BTCUSDT"])].ema0.period,42);
+  await choosePair("ETH");await open();
+  assert.equal(await page.getByRole("checkbox",{name:"EMA 1",exact:true}).isChecked(),false);
+  assert.equal(await page.getByRole("checkbox",{name:"EMA 2",exact:true}).isChecked(),true);
+  await page.getByRole("checkbox",{name:"EMA 1",exact:true}).check();await page.getByRole("checkbox",{name:"EMA 1: для всех",exact:true}).uncheck();await page.getByRole("spinbutton",{name:"Период EMA 1",exact:true}).fill("10");await apply();
+  await page.getByRole("button",{name:"Bybit",exact:true}).click();await open();
+  assert.equal(await page.getByRole("checkbox",{name:"EMA 1",exact:true}).isChecked(),false);assert.equal(await page.getByRole("checkbox",{name:"EMA 2",exact:true}).isChecked(),true);
+  await page.keyboard.press("Escape");await page.getByRole("button",{name:"Binance",exact:true}).click();await choosePair("BTC");
+  await page.reload();await open();
+  assert.equal(await page.getByRole("spinbutton",{name:"Период EMA 1",exact:true}).inputValue(),"42");assert.equal(await page.getByRole("checkbox",{name:"EMA 1: для всех",exact:true}).isChecked(),false);
+  await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/indicator-scope-desktop.png"});
+  await page.setViewportSize({width:320,height:568});
+  assert.ok(await page.locator(".indicator-dialog").evaluate(el=>el.scrollWidth<=el.clientWidth));
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await page.screenshot({path:".qa/indicator-scope-mobile.png"});
+  await page.getByRole("checkbox",{name:"EMA 1: для всех",exact:true}).check();await apply();
+  const promoted=(await(await context.request.get(`${baseURL}/api/indicators`)).json()).data;
+  assert.equal(promoted.settings.ema[0].enabled,true);assert.equal(promoted.settings.ema[0].period,42);assert.equal(promoted.overrides[JSON.stringify(["binance","spot","BTCUSDT"])],undefined);
+  assert.equal(promoted.overrides[JSON.stringify(["binance","spot","ETHUSDT"])].ema0.period,10,"Other chart exceptions survive promotion");
+  assert.deepEqual(errors,[]);console.log("PASS per-indicator global/local flags, independent pairs and exchanges, SQLite reload, promotion to global and compact mobile layout");
+}finally{await browser.close();}

@@ -1,0 +1,2 @@
+import {record,rows,tick,type TradeFactory} from "./types";
+export const bitgetTrades:TradeFactory=pairs=>({url:"wss://ws.bitget.com/v2/ws/public",subscriptions:[{op:"subscribe",args:pairs.map(p=>({instType:"SPOT",channel:"trade",instId:p.symbol}))}],ping:"ping",decode(input){const event=record(input),arg=record(event.arg);return arg.channel==="trade"?rows(event.data).flatMap(value=>{const item=record(value);return tick(arg.instId,item.price,item.ts,item.size,item.side,item.tradeId);}):[];}});

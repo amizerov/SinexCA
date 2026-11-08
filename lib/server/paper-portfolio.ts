@@ -1,0 +1,14 @@
+import type {DatabaseSync} from "node:sqlite";
+import type {PaperBalance,PaperFill,PaperOrder} from "@/lib/paper/account";
+import type {DemoOrder,DemoFill} from "@/lib/paper/orders";
+import {paperPortfolio} from "@/lib/paper/portfolio";
+export function readPaperPortfolio(db:DatabaseSync,accountId:string,excludeOrder?:string){
+  const balances:PaperBalance[]=db.prepare("SELECT * FROM paper_balances WHERE account_id=?").all(accountId).map(b=>({currency:String(b.currency),decimals:Number(b.decimals),availableUnits:Number(b.available_units),reservedUnits:Number(b.reserved_units)}));
+  const demo:DemoOrder[]=db.prepare("SELECT 1 FROM sqlite_master WHERE name='demo_orders'").get()?db.prepare("SELECT data FROM demo_orders WHERE account_id=? ORDER BY rowid").all(accountId).map(r=>JSON.parse(String(r.data))):[];
+  const byId=new Map(demo.map(o=>[o.id,o]));
+  const fills:PaperFill[]=demo.length?db.prepare("SELECT f.data FROM demo_fills f JOIN demo_orders o ON o.id=f.order_id WHERE o.account_id=? ORDER BY f.rowid").all(accountId).map(r=>{const f:DemoFill=JSON.parse(String(r.data)),o=byId.get(f.orderId)!;return {id:f.id,orderId:o.id,exchange:o.exchange,symbol:o.symbol,base:o.base,quote:o.quote,side:o.side,price:f.price,quantityAtoms:f.quantity,settlementCurrency:o.quote,settlementUnits:f.quoteUnits,feeUnits:f.feeUnits,createdAt:f.receivedAt};}):[];
+  const legacy=db.prepare("SELECT f.*,o.exchange,o.symbol,o.base_asset,o.quote_asset,o.side FROM paper_fills f JOIN paper_orders o ON o.id=f.order_id AND o.account_id=f.account_id WHERE f.account_id=? ORDER BY f.created_at,f.rowid").all(accountId).map(f=>({id:String(f.id),orderId:String(f.order_id),exchange:String(f.exchange),symbol:String(f.symbol),base:String(f.base_asset),quote:String(f.quote_asset),side:String(f.side),price:Number(f.price_atoms)/1e8,quantityAtoms:Number(f.quantity_atoms),settlementCurrency:String(f.settlement_currency),settlementUnits:Number(f.settlement_units),feeUnits:Number(f.fee_units),createdAt:Number(f.created_at)}));
+  const orders:PaperOrder[]=demo.map(o=>({id:o.id,exchange:o.exchange,symbol:o.symbol,side:o.side,orderType:o.type,status:o.status,quantityAtoms:o.quantity,filledAtoms:o.filled,limitPriceAtoms:null,createdAt:o.createdAt,reservedUnits:o.reserved,reservedCurrency:o.side==="buy"?o.quote:o.base}));
+  for(const o of db.prepare("SELECT * FROM paper_orders WHERE account_id=?").all(accountId))orders.push({id:String(o.id),exchange:String(o.exchange),symbol:String(o.symbol),side:String(o.side),orderType:String(o.order_type),status:String(o.status),quantityAtoms:Number(o.quantity_atoms),filledAtoms:Number(o.filled_atoms),limitPriceAtoms:null,createdAt:Number(o.created_at),reservedUnits:Number(o.reserved_usdt_units),reservedCurrency:"USDT"});
+  return paperPortfolio(balances,[...legacy,...fills].sort((a,b)=>a.createdAt-b.createdAt),orders.filter(o=>o.id!==excludeOrder));
+}

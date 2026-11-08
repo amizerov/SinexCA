@@ -1,0 +1,57 @@
+import {chromium} from "playwright-core";
+import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
+const baseURL=process.env.BASE_URL||"http://localhost:3002",browser=await chromium.launch({channel:"chrome",headless:true});
+try{
+  const context=await browser.newContext({viewport:{width:1440,height:900}}),other=await browser.newContext(),page=await context.newPage(),second=await context.newPage(),errors=[];
+  for(const p of [page,second])p.on("pageerror",error=>errors.push(error.message));
+  await context.routeWebSocket(/wss:\/\//,socket=>socket.close());
+  await context.route("**/api/market/**",async route=>{const path=new URL(route.request().url()).pathname;await route.fulfill({json:{data:path.endsWith("/pairs")?[{exchange:"binance",marketType:"spot",baseAsset:"BTC",quoteAsset:"USDT",symbol:"BTCUSDT"}]:[]}});});
+  const session=(await(await context.request.get(`${baseURL}/api/auth/session`)).json()).data;
+  const open=async p=>{await p.goto(`${baseURL}/account`);await p.locator('[data-paper-balance="USDT"]').waitFor();};
+  await open(page);await open(second);
+  assert.equal(await page.locator(".paper-mode").count(),0);
+  assert.equal(await page.getByRole("textbox",{name:"Сумма тестового пополнения"}).count(),0,"Deposit form is outside the main page layout");
+  await page.getByRole("button",{name:"Пополнить",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"Пополнить тестовый счёт",exact:true});await dialog.waitFor();
+  await dialog.getByRole("textbox",{name:"Сумма тестового пополнения"}).fill("10000.123456");await dialog.getByRole("button",{name:"Пополнить",exact:true}).click();
+  await page.locator(".paper-notice").waitFor();
+  const first=(await(await context.request.get(`${baseURL}/api/paper/account`)).json()).data;
+  assert.equal(first.balances[0].availableUnits,10000123456);assert.equal(first.operations.length,1);
+  await second.waitForFunction(()=>document.querySelector("[data-paper-balance]")?.textContent.replaceAll(/\s/g,"").includes("10000,123456"));
+  const mutationId=crypto.randomUUID(),body={amount:"0.1",mutationId},headers={"X-Workspace-Id":session.ownerId};
+  for(let i=0;i<2;i++)assert.equal((await context.request.post(`${baseURL}/api/paper/account`,{headers,data:body})).status(),200);
+  assert.equal((await context.request.post(`${baseURL}/api/paper/account`,{headers,data:{...body,amount:"1"}})).status(),409);
+  assert.equal((await context.request.post(`${baseURL}/api/paper/account`,{headers: {...headers,Origin:"https://foreign.invalid"},data:{amount:"1",mutationId:crypto.randomUUID()}})).status(),403);
+  assert.equal((await context.request.post(`${baseURL}/api/paper/account`,{headers:{"X-Workspace-Id":"wrong-owner"},data:{amount:"1",mutationId:crypto.randomUUID()}})).status(),409);
+  const isolated=(await(await other.request.get(`${baseURL}/api/paper/account`)).json()).data;assert.equal(isolated.balances[0].availableUnits,0);
+  const email=`paper-${crypto.randomUUID()}@example.com`,password="Paper-account-123456";
+  assert.equal((await context.request.post(`${baseURL}/api/auth/register`,{data:{email,password}})).status(),200);
+  const registered=(await(await context.request.get(`${baseURL}/api/paper/account`)).json()).data;
+  assert.equal(registered.id,first.id);assert.equal(registered.balances[0].availableUnits,10000223456);assert.equal(registered.operationCount,2);
+  await open(page);
+  for(const [currency,amount] of [["BTC","0.12345678"],["USDC","500"],["USD","250"]]){
+    await page.getByRole("button",{name:"Пополнить",exact:true}).click();await dialog.waitFor();
+    await dialog.getByLabel("Валюта",{exact:true}).selectOption(currency);
+    await dialog.getByRole("textbox",{name:"Сумма тестового пополнения"}).fill(amount);
+    await dialog.getByRole("button",{name:"Пополнить",exact:true}).click();await dialog.waitFor({state:"hidden"});
+  }
+  const multi=(await(await context.request.get(`${baseURL}/api/paper/account`)).json()).data;
+  assert.equal(multi.balances.find(b=>b.currency==="BTC").availableUnits,12345678);
+  assert.equal(multi.balances.find(b=>b.currency==="USDC").availableUnits,500000000);
+  assert.equal(multi.balances.find(b=>b.currency==="USD").availableUnits,250000000);
+  assert.equal(multi.balances.find(b=>b.currency==="USDT").availableUnits,10000223456,"No implicit conversion or USDT credit");
+  assert.ok((await page.locator('[data-currency="BTC"]').textContent()).includes("0,12345678"));
+  await page.getByRole("button",{name:"Пополнить",exact:true}).click();await dialog.waitFor();await page.keyboard.press("Escape");await dialog.waitFor({state:"hidden"});
+  await open(page);await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/paper-account-desktop.png"});
+  await page.setViewportSize({width:320,height:568});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  assert.ok(await page.locator(".account-page-content").evaluate(node=>node.scrollWidth<=node.clientWidth));
+  await page.screenshot({path:".qa/paper-account-mobile.png"});
+  await page.getByRole("button",{name:"Пополнить",exact:true}).click();await dialog.waitFor();
+  assert.ok(await dialog.evaluate(node=>{const box=node.getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight;}));
+  await page.screenshot({path:".qa/paper-deposit-mobile.png"});await page.keyboard.press("Escape");
+  const updatedSession=(await(await context.request.get(`${baseURL}/api/auth/session`)).json()).data;
+  assert.notEqual(updatedSession.ownerId,session.ownerId);
+  assert.equal((await context.request.post(`${baseURL}/api/paper/account`,{headers,data:{amount:"1",mutationId:crypto.randomUUID()}})).status(),409,"Stale owner cannot credit a different account");
+  assert.deepEqual(errors,[]);console.log("PASS demo balance/deposit/history, exact amounts, idempotency, CSRF and owner guards, tab sync, registration transfer and mobile layout");
+}finally{await browser.close();}

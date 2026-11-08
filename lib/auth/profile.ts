@@ -1,0 +1,3 @@
+import {z} from "zod";
+export const profileNameSchema=z.object({displayName:z.string().trim().max(200,"Имя должно быть не длиннее 200 символов").refine(value=>!/[\u0000-\u001f\u007f]/.test(value),"Имя содержит недопустимые символы")}).strict();
+export const changePasswordSchema=z.object({currentPassword:z.string().max(128).optional(),newPassword:z.string().min(10,"Новый пароль должен содержать от 10 символов").max(128,"Пароль должен быть не длиннее 128 символов"),confirmPassword:z.string().max(128)}).strict().refine(value=>value.newPassword===value.confirmPassword,{message:"Пароли не совпадают",path:["confirmPassword"]});

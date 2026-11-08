@@ -1,0 +1,2 @@
+import {record,rows,tick,type TradeFactory} from "./types";
+export const okxTrades:TradeFactory=pairs=>({url:"wss://ws.okx.com:8443/ws/v5/public",subscriptions:[{op:"subscribe",args:pairs.map(p=>({channel:"trades",instId:p.symbol}))}],ping:"ping",decode(input){const event=record(input),arg=record(event.arg);return arg.channel==="trades"?rows(event.data).flatMap(value=>{const item=record(value);return arg.instId===item.instId?tick(item.instId,item.px,item.ts,item.sz,item.side,item.tradeId):[];}):[];}});

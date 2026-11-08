@@ -1,0 +1,3 @@
+import {record,tick,type TradeFactory} from "./types";
+// Matches contain individual executions; Coinbase's side is the maker, so invert it for aggressor colours.
+export const coinbaseTrades:TradeFactory=pairs=>({url:"wss://ws-feed.exchange.coinbase.com",subscriptions:[{type:"subscribe",product_ids:pairs.map(p=>p.symbol),channels:["matches","heartbeat"]}],decode(input){const event=record(input);return event.type==="match"||event.type==="last_match"?tick(event.product_id,event.price,Date.parse(String(event.time)),event.size,event.side==="buy"?"sell":event.side==="sell"?"buy":undefined,event.trade_id):[];}});
