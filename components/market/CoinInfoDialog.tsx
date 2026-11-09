@@ -40,6 +40,7 @@ export function CoinInfoDialog({pair,ticker,lastPrice,usdtUsdRate,close}:{pair:T
   return <dialog ref={dialog} className="account-dialog coin-info-dialog" onCancel={close} onClick={event=>{if(event.target===event.currentTarget){const bounds=event.currentTarget.getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)close();}}} aria-labelledby="coin-info-title">
     <button className="account-close" onClick={close} aria-label="Закрыть информацию о монете"><X size={18}/></button>
     <div className="coin-info-heading"><CoinIcon asset={pair.baseAsset}/><div><h2 id="coin-info-title">{info?.name||coinNames[pair.baseAsset]||pair.baseAsset}</h2><span>{pair.baseAsset}{info?.rank?` · №${info.rank} по капитализации`:""}</span></div></div>
+    {info&&info.contracts.length>0&&<section className="coin-info-section coin-info-contracts-pinned" aria-label="Контракты по сетям"><h3>Контракты по сетям</h3><dl className="coin-info-contracts">{info.contracts.map(contract=><div key={`${contract.network}:${contract.address}`}><dt>{contract.network}</dt><dd><code>{contract.address}</code></dd></div>)}</dl></section>}
     <section className="coin-info-section"><h3>{EXCHANGES[pair.exchange].name} · {pair.baseAsset}/{pair.quoteAsset} · Spot</h3>
       <dl className="coin-info-metrics">
         {metric("Последняя цена",`${price(lastPrice)} ${pair.quoteAsset}`)}
@@ -71,7 +72,6 @@ export function CoinInfoDialog({pair,ticker,lastPrice,usdtUsdRate,close}:{pair:T
         {metric("Изменение · 24ч",percent(market.price_change_percentage_24h))}{metric("Изменение · 7 дней",percent(market.price_change_percentage_7d))}
         {metric("Изменение · 30 дней",percent(market.price_change_percentage_30d))}{metric("Изменение · год",percent(market.price_change_percentage_1y))}
       </dl></section>}
-      {info.contracts.length>0&&<section className="coin-info-section"><h3>Контракты по сетям</h3><dl className="coin-info-contracts">{info.contracts.map(contract=><div key={contract.network}><dt>{contract.network}</dt><dd><code>{contract.address}</code></dd></div>)}</dl></section>}
       <section className="coin-info-section"><h3>Ссылки проекта</h3><div className="coin-info-links">{info.links.map(link=><a key={link.url} className="coin-info-link" href={link.url} target="_blank" rel="noopener noreferrer">{link.label}<ExternalLink size={12}/></a>)}</div></section>
       <footer className="coin-info-footer"><a className="coin-info-link" href={info.sourceUrl} target="_blank" rel="noopener noreferrer">{info.sourceName||"CoinGecko"} <ExternalLink size={12}/></a>{info.additionalSources?.filter(source=>source.url!==info.sourceUrl&&source.url!==info.historySource?.url).map(source=><a key={source.url} className="coin-info-link" href={source.url} target="_blank" rel="noopener noreferrer">{source.name}<ExternalLink size={12}/></a>)}<span>{stale?"Сохранённые данные · источник временно недоступен":`Обновлено: ${info.updatedAt?new Date(info.updatedAt).toLocaleString("ru-RU"):"время не указано"}`}</span></footer>
     </>}

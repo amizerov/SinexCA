@@ -1,6 +1,6 @@
 import type { TradingPair } from "../types";
 export interface TradeTick {symbol:string;price:number;time:number;receivedAt:number;quantity?:number;side?:"buy"|"sell";id?:string}
-export interface TradeProtocol {url:string;subscriptions:unknown[];subscribeDelayMs?:number;ping?:unknown;pingMs?:number;decode:(input:unknown)=>TradeTick[];reply?:(input:unknown)=>unknown}
+export interface TradeProtocol {url:string;subscriptions:unknown[];subscribeDelayMs?:number;ping?:unknown;pingMs?:number;decode:(input:unknown)=>TradeTick[];reply?:(input:unknown)=>unknown;isSubscribed?:(input:unknown)=>boolean}
 export type TradeFactory=(pairs:TradingPair[],signal:AbortSignal)=>TradeProtocol|Promise<TradeProtocol>;
 export const record=(input:unknown):Record<string,unknown>=>input!==null&&typeof input==="object"&&!Array.isArray(input)?input as Record<string,unknown>:{};
 export const rows=(input:unknown):unknown[]=>Array.isArray(input)?input:[];

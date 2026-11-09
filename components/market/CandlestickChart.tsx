@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {createPortal} from "react-dom";
 import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode,LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp,type IPriceLine } from "lightweight-charts";
-import { Expand, Minimize, ScanLine, BarChart3,SlidersHorizontal } from "lucide-react";
+import { Expand, Minimize, ScanLine, BarChart3,SlidersHorizontal,MapPin } from "lucide-react";
 import type { Candle, ExchangeId, Timeframe } from "@/lib/market/types";
 import { ChartDrawings } from "./ChartDrawings";
 import { useAccount } from "@/components/Account";
@@ -12,12 +12,15 @@ import type { useIndicatorPreferences } from "@/hooks/use-indicator-preferences"
 import { useChartIndicators } from "@/hooks/use-chart-indicators";
 import { useBrowserTimeZone } from "@/hooks/use-browser-time-zone";
 import { chartTimeFormatters } from "@/lib/market/chart-time";
-import {isOpen,orderLabel,type DemoOrder} from "@/lib/paper/orders";
+import {isOpen,orderLabel,type DemoOrder,type DemoFill} from "@/lib/paper/orders";
 import type {OrderDraft} from "./DemoTrading";
+import type {PaperPosition} from "@/lib/paper/portfolio";
+import {useExecutionMarkers} from "@/hooks/use-execution-markers";
+import {ExecutionTooltip} from "./ExecutionTooltip";
 import {DemoOrderMarkers} from "./DemoOrderMarkers";
 
-interface Props { orders?:DemoOrder[];onCancelOrder?:(o:DemoOrder)=>void;onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string; retry: () => void }
-export function CandlestickChart({ orders,onCancelOrder,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error, retry }: Props) {
+interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onCancelOrder?:(o:DemoOrder)=>void;onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string; retry: () => void }
+export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onCancelOrder,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error, retry }: Props) {
   const {session}=useAccount();
   const timeZone=useBrowserTimeZone();
   const container = useRef<HTMLDivElement>(null);
@@ -28,6 +31,7 @@ export function CandlestickChart({ orders,onCancelOrder,onOrder,tickPrice,prefer
   const previous = useRef<{ key: string; candles: Candle[] } | null>(null);
   const needsViewport=useRef(true);
   const [expanded, setExpanded] = useState(false);
+  const [showTrades,setShowTrades]=useState(true);
   const [context,setContext]=useState<{x:number;y:number;price:number}>();
   useEffect(()=>{if(!context)return;const close=()=>setContext(undefined);window.addEventListener("pointerdown",close);window.addEventListener("keydown",close);return()=>{window.removeEventListener("pointerdown",close);window.removeEventListener("keydown",close);};},[context]);
   useEffect(()=>{
@@ -138,11 +142,14 @@ export function CandlestickChart({ orders,onCancelOrder,onOrder,tickPrice,prefer
     return()=>cancelAnimationFrame(frame);
   },[candles]);
 
+  const executions=useExecutionMarkers(chart,series,fills,candles,exchange,symbol,timeframe,positions,showTrades);
+  const basisChange=executions.breakEven&&tickPrice!==undefined?(tickPrice/executions.breakEven-1)*100:undefined;
   const legend = hovered?.exchangeName === exchangeName && hovered.symbol === symbol && hovered.timeframe === timeframe ? hovered.candle : candles.at(-1);
   return <div className={`chart-block ${expanded ? "expanded" : ""}`}>
     <div className="chart-tools">
     <div className="ohlc"><span>O <b>{price(legend?.open)}</b></span><span>H <b>{price(legend?.high)}</b></span><span>L <b>{price(legend?.low)}</b></span><span>C <b className={legend && legend.close >= legend.open ? "positive" : "negative"}>{price(legend?.close)}</b></span><span className="ohlc-volume">Объём <b>{compact(legend?.volume)}</b></span></div>
       <div className="chart-actions">
+        {(fills.length>0||executions.average!==undefined||tradesError)&&<button className={`icon-button ${showTrades?"selected":""}`} aria-label="Показать или скрыть мои сделки" aria-pressed={showTrades} title={tradesError||`Мои исполнения · ${executions.grouped.markers.length} меток${tradesTruncated?" · история ограничена 10 000 исполнений":""}`} onClick={()=>setShowTrades(v=>!v)}><MapPin size={15}/></button>}
         <button className={`icon-button indicator-open ${count?"selected":""}`} aria-label="Индикаторы" title={preferences.error||`${indicatorNames.join(", ")||"Выбрать индикаторы"} · ${Object.values(preferences.forAll).every(Boolean)?"общие настройки":"есть настройки только для этой пары"}`} onClick={()=>setIndicatorDialog(true)}><SlidersHorizontal size={15}/><span>Индикаторы</span>{count>0&&<b>{count}</b>}</button>
         <button className={`icon-button ${showVolume ? "selected" : ""}`} title="Показать или скрыть объём" aria-label="Показать или скрыть объём" aria-pressed={showVolume} disabled={!preferences.ready||preferences.busy} onClick={() => void preferences.save({...preferences.settings,volume:!showVolume})}><BarChart3 size={16} /></button>
         <button className="icon-button" title="Показать всю историю" aria-label="Показать всю историю" onClick={() => chart.current?.timeScale().fitContent()}><ScanLine size={16} /></button>
@@ -153,6 +160,10 @@ export function CandlestickChart({ orders,onCancelOrder,onOrder,tickPrice,prefer
     <span className="sr-only" data-preferences-status={preferences.busy?"saving":"saved"}/>
     <div className="chart-canvas-wrap" onContextMenu={e=>{if(!onOrder||!series.current||!container.current||!candles.length)return;if((e.target as HTMLElement).closest("button,input,[data-drawing-id]"))return;const rect=container.current.getBoundingClientRect(),y=e.clientY-rect.top;if(y<0||y>(chart.current?.panes()[0]?.getHeight()??0))return;const p=series.current.coordinateToPrice(y);if(p===null||p<=0)return;e.preventDefault();setContext({x:Math.max(4,Math.min(e.clientX,window.innerWidth-245)),y:Math.max(4,Math.min(e.clientY,window.innerHeight-185)),price:Number(p.toPrecision(10))});}}>
       <div ref={container} className="chart-canvas" aria-label={`Свечной график ${symbol}, интервал ${timeframe}, время ${timeZone}`} role="img" />
+      <span className="sr-only" data-execution-count={showTrades?executions.grouped.markers.length:0}>{showTrades?executions.grouped.markers.map(t=>`${t.side==="buy"?"Покупка":"Продажа"}: ${t.quantity} ${t.base}, цена ${t.price} ${t.quote}`).join("; "):"Метки сделок скрыты"}</span>
+      {showTrades&&executions.tooltip&&<ExecutionTooltip {...executions.tooltip}/>}
+      {showTrades&&executions.average!==undefined&&<div className="chart-entry-summary" data-entry-price={executions.average} title="Средняя себестоимость остатка с комиссией покупки. Пунктир — ориентир безубыточности с DEMO-комиссией продажи 0,1%. Процент сравнивает текущую цену с этим ориентиром, без оценки глубины стакана."><span>Вход {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:8}).format(executions.average)} {executions.quote}</span>{basisChange!==undefined&&<strong className={basisChange>=0?"positive":"negative"}>{basisChange>0?"+":""}{basisChange.toFixed(2)}%</strong>}</div>}
+      {showTrades&&(tradesError||tradesTruncated||executions.grouped.outside>0)&&<span className="chart-trades-warning" role="status">{tradesError||(tradesTruncated?"Показаны последние 10 000 исполнений диапазона":`${executions.grouped.outside} исполнений без свечи в истории`)}</span>}
       {onOrder&&onCancelOrder&&<DemoOrderMarkers chart={chart} series={series} container={container} orders={(orders||[]).filter(o=>o.exchange===exchange&&o.symbol===symbol)} onEdit={order=>onOrder({order,price:order.limit??order.stop??tickPrice??1,side:order.side,type:order.type})} onCancel={onCancelOrder}/>}
       {context&&createPortal(<div className="demo-chart-menu" role="menu" aria-label="Действия с ценой" style={{left:context.x,top:context.y}} onPointerDown={e=>e.stopPropagation()}>{(["buy","sell"] as const).map(side=><button role="menuitem" key={side} onClick={()=>{onOrder?.({side,price:context.price,type:"limit"});setContext(undefined);}}>{side==="buy"?"Купить":"Продать"} · Лимит</button>)}<button role="menuitem" onClick={()=>{onOrder?.({side:"buy",price:context.price,type:"stop_limit"});setContext(undefined);}}>Новая стоп-заявка…</button><button role="menuitem" onClick={()=>{void navigator.clipboard?.writeText(String(context.price));setContext(undefined);}}>Копировать цену</button></div>,document.body)}
       {session&&<ChartDrawings key={`${session.ownerId}:${exchange}:spot:${symbol}`} ownerId={session.ownerId} scope={{ exchange, marketType: "spot", symbol }} chart={chart} series={series} candles={candles} />}

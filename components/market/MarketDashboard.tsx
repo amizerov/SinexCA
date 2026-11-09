@@ -14,7 +14,7 @@ import { BrandMark } from "./BrandMark";
 import { EXCHANGES, EXCHANGE_IDS } from "@/lib/market/exchange-config";
 import { compact, coinNames, percent, price } from "@/lib/market/format";
 import { type ExchangeId, type Timeframe, type TradingPair } from "@/lib/market/types";
-import { exchangeTimeframes,intervalSpec,nearestTimeframe,wsInterval } from "@/lib/market/intervals";
+import { exchangeTimeframes,intervalSpec,nearestTimeframe,wsInterval,shiftInterval } from "@/lib/market/intervals";
 import { usePairOrder } from "@/hooks/use-pair-order";
 import { AccountButton,useAccount } from "@/components/Account";
 import { useIndicatorPreferences } from "@/hooks/use-indicator-preferences";
@@ -27,6 +27,7 @@ import {DemoOrderDialog,DemoOrdersPanel,type OrderDraft} from "./DemoTrading";
 import {TradesPanel} from "./TradesPanel";
 import {TerminalSideColumn} from "./TerminalSideColumn";
 import {PanelDockProvider} from "./PanelDock";
+import {useChartTrades} from "@/hooks/use-chart-trades";
 import {useDockViewport} from "@/hooks/use-order-book-dock";
 
 export function MarketDashboard() {
@@ -71,12 +72,14 @@ export function MarketDashboard() {
     return () => clearInterval(timer);
   }, []);
   const latestCandle = market.candles.at(-1);
+  const chartTrades=useChartTrades(exchange,pair?.symbol,market.candles[0]?.time,latestCandle?shiftInterval(latestCandle.time,timeframe,1):undefined);
   const trade=pair&&tickers.status==="live"?tickers.ticks?.get(pair.symbol):undefined;
   const lastPrice = trade?.price??ticker?.lastPrice??market.livePrice??latestCandle?.close;
   const conversionSymbol=catalog.data?.find(p=>p.baseAsset==="USDT"&&p.quoteAsset==="USD")?.symbol;
   const usdtUsdRate=conversionSymbol?tickerMap.get(conversionSymbol)?.lastPrice:undefined;
   const volume=usdtVolume(pair,ticker,lastPrice,usdtUsdRate);
   const live = tickers.status === "live";
+  const tradeConnected=!!tickers.connection?.connected&&!!tickers.connection?.subscribed;
   const staleTicker = !!ticker && !!now && now - ticker.receivedAt > 20_000;
   const staleCandles = !tickers.lastStreamAt || (!!now && now - tickers.lastStreamAt > 20000);
   const error = workspaceError || pairs.error || tickers.error || market.error;
@@ -93,7 +96,7 @@ export function MarketDashboard() {
         setQuote={value=>updateWorkspace({quote:value,selected:pair?.baseAsset||selected,selectedQuote:value==="all"?pair?.quoteAsset||selectedQuote:value})}
         sort={effectiveSort} setSort={setSort} statsReady={statsReady} volumeAvailable={volumeAvailable} changeAvailable={changeAvailable}
         loading={listLoading} error={pairs.error} refresh={pairs.refresh} select={setSelected}/>:undefined;
-  const trades=tradesOpen&&pair?<TradesPanel inColumn={tradeColumn} key={`trades:${session?.ownerId}:${pair.exchange}:${pair.symbol}`} pair={pair} trades={tickers.trades} status={tickers.status} demo={orders.data} error={orders.error}/>:undefined;
+  const trades=tradesOpen&&pair?<TradesPanel inColumn={tradeColumn} key={`trades:${session?.ownerId}:${pair.exchange}:${pair.symbol}`} pair={pair} trades={tickers.trades} status={tickers.status} connection={tickers.connection} demo={orders.data} error={orders.error}/>:undefined;
   const tapeSide=tradesSide==="auto"?(marketPanel.mode==="left"?"left":"right"):tradesSide;
   return <PanelDockProvider><div className="app-shell">
     <header className="topbar">
@@ -123,14 +126,14 @@ export function MarketDashboard() {
           <div className="timeframe-toolbar">
             <div className="timeframe-buttons" role="group" aria-label="Интервал свечей">{availableTimeframes.map(tf => <button key={tf} title={intervalSpec(exchange,tf).computed?`${tf} · из часовых свечей`:tf==="1M"?"1 месяц":tf==="3M"?"3 месяца":tf} aria-pressed={timeframe === tf} className={timeframe === tf ? "active" : ""} onClick={() => setTimeframe(tf)}>{tf}</button>)}</div>
             <select className="timeframe-select" aria-label="Интервал свечей" value={timeframe} onChange={event=>setTimeframe(event.target.value as Timeframe)}>{availableTimeframes.map(tf=><option key={tf} value={tf}>{tf}{tf.endsWith("M")?" · мес.":""}{intervalSpec(exchange,tf).computed?" · расчётный":""}</option>)}</select>
-            <span className={`stream-pill ${live && !staleCandles ? "" : "waiting"}`} role="status" title={`Цена: сделки WebSocket · ${candleStream?"свечи WebSocket":"свечи REST 15с"} · статистика 24ч: REST 60с`}><span className="status-dot" /><span>{live && !staleCandles ? "Онлайн" : tickers.status === "connecting" ? "Подключение…" : "REST · 5с"}</span></span>
+            <span className={`stream-pill ${live && !staleCandles ? "" : "waiting"}`} role="status" title={`${!live&&tradeConnected?"WebSocket подключён, новых сделок нет; ":""}Цена: ${live?"сделки WebSocket":"REST 5с"} · ${candleStream?"свечи WebSocket":"свечи REST 15с"} · статистика 24ч: REST 60с`}><span className="status-dot" /><span>{live && !staleCandles ? "Онлайн" : tradeConnected?"WS + REST · 5с":tickers.status === "connecting" ? "Подключение…" : "REST · 5с"}</span></span>
             <button className="button refresh-button" onClick={refresh} title="Обновить данные" aria-label="Обновить"><RefreshCw size={13} className={pairs.loading || tickers.loading || market.loading ? "spinning" : ""} /><span>Обновить</span></button>
             {!orderBookOpen&&<button className="button orderbook-button" disabled={!pair||!session} onClick={()=>setOrderBookOpen(true)} aria-label="Показать стакан" title="Показать стакан"><ListOrdered size={14}/><span>Стакан</span></button>}
             <button className="button demo-order-button" disabled={!pair||!session||!lastPrice} onClick={()=>pair&&lastPrice&&setOrderDraft({pair,price:lastPrice,side:"buy",type:"limit",ownerId:session?.ownerId})} title="Создать тестовую заявку" aria-label="Создать тестовую заявку">＋<span>Заявка</span></button>
             {!marketsOpen&&<button className="button markets-toggle-button" disabled={!session} onClick={()=>updateWorkspace({marketsOpen:true})} aria-label="Показать рынки" title="Показать список пар"><PanelRight size={14}/><span>Рынки</span></button>}
             {!tradesOpen&&<button className="button trades-toggle-button" disabled={!pair||!session} onClick={()=>updateWorkspace({tradesOpen:true})} aria-label="Показать сделки" title="Показать сделки"><Activity size={14}/><span>Сделки</span></button>}
           </div>
-          <CandlestickChart onCancelOrder={o=>{void orders.request({action:"cancel",id:o.id}).catch(e=>window.alert(e instanceof Error?e.message:"Не удалось отменить заявку"));}} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} retry={refresh} />
+          <CandlestickChart fills={chartTrades.fills} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={orders.data?.account.portfolio?.positions||[]} onCancelOrder={o=>{void orders.request({action:"cancel",id:o.id}).catch(e=>window.alert(e instanceof Error?e.message:"Не удалось отменить заявку"));}} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} retry={refresh} />
         </section>
         <DemoOrdersPanel orders={orders}/>
       </main>

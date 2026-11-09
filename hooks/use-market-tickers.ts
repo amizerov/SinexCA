@@ -1,11 +1,11 @@
 "use client";
 import {useCallback,useEffect,useMemo,useState} from "react";
 import type {ExchangeId,Ticker,TradingPair,StreamStatus} from "@/lib/market/types";
-import {subscribeTrades} from "@/lib/market/trades/stream";
+import {subscribeTrades,type TradeConnection} from "@/lib/market/trades/stream";
 import type {TradeTick} from "@/lib/market/trades/types";
 import {mergeTrades} from "@/lib/market/trades/tape";
 import {useMarketResource} from "./use-market-resource";
-interface StreamState {key:string;ticks:Map<string,TradeTick>;trades?:TradeTick[];status:StreamStatus;lastStreamAt?:number}
+interface StreamState {key:string;ticks:Map<string,TradeTick>;trades?:TradeTick[];status:StreamStatus;lastStreamAt?:number;connection?:TradeConnection}
 export function useMarketTickers(exchange:ExchangeId,pairs:TradingPair[]|undefined,selected:TradingPair|undefined,quote?:string){
   const overview=useMarketResource<Ticker[]>(pairs?.length?`/api/market/overview?exchange=${exchange}${quote?`&quote=${encodeURIComponent(quote)}`:""}`:null,60000);
   const encoded=JSON.stringify(selected||null),key=`${exchange}:${encoded}`;
@@ -20,6 +20,7 @@ export function useMarketTickers(exchange:ExchangeId,pairs:TradingPair[]|undefin
     const stop=subscribeTrades(exchange,[pair],{
       onStatus:value=>patch({status:value,...value==="reconnecting"?{ticks:new Map()}: {}}),
       onReconnect:refreshSelected,
+      onConnection:connection=>patch({connection}),
       onTrades:updates=>{if(!stopped)setStream(old=>({key,ticks:new Map(),status:"connecting",...old?.key===key?old:{},trades:mergeTrades(old?.key===key?old.trades||[]:[],updates)}));},
       onTicks:updates=>{if(!stopped)patch({ticks:new Map(updates.map(tick=>[tick.symbol,tick])),lastStreamAt:Date.now()});},
     });
@@ -35,5 +36,5 @@ export function useMarketTickers(exchange:ExchangeId,pairs:TradingPair[]|undefin
   },[overview.data,fallback.data,current,status]);
   const refreshAll=overview.refresh;
   const refresh=useCallback(()=>{refreshAll();refreshSelected();},[refreshAll,refreshSelected]);
-  return {data,ticks:current?.ticks,trades:current?.trades||[],status,lastStreamAt:current?.lastStreamAt,error:overview.error||fallback.error,loading:!!pairs?.length&&overview.loading&&!overview.data,refresh};
+  return {data,ticks:current?.ticks,trades:current?.trades||[],status,connection:current?.connection,lastStreamAt:current?.lastStreamAt,error:overview.error||fallback.error,loading:!!pairs?.length&&overview.loading&&!overview.data,refresh};
 }

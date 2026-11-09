@@ -13,6 +13,18 @@ function setup(){const a=new AccountStore(":memory:",false),owner=a.createGuest(
 function book(price=100,qty=10,time=Date.now()):OrderBook{return {exchange:"binance",symbol:"SOLUSDT",bids:[{price:price-1,quantity:qty}],asks:[{price,quantity:qty}],receivedAt:time,exchangeTime:null};}
 function input(extra:Record<string,unknown>={}){return orderInput.parse({exchange:"binance",symbol:"SOLUSDT",side:"buy",type:"limit",quantity:"1",limit:90,mutationId:randomUUID(),...extra});}
 
+test("chart fills load scoped history beyond the global tape and exclude other owners",()=>{
+  const {a,owner,paper,orders}=setup();try{
+    const b=book();const order=orders.create(owner,input({type:"market",limit:undefined}),pair,100,b);orders.process(b);const original=orders.fills(owner)[0];
+    const foreign={...order,id:randomUUID(),exchange:"bybit",symbol:"ETHUSDT",base:"ETH"};a.db.prepare("INSERT INTO demo_orders VALUES(?,?,?,?,?)").run(foreign.id,order.accountId,randomUUID(),"{}",JSON.stringify(foreign));
+    for(let i=0;i<205;i++){const id=randomUUID();a.db.prepare("INSERT INTO demo_fills VALUES(?,?,?)").run(id,foreign.id,JSON.stringify({...original,id,orderId:foreign.id,receivedAt:b.receivedAt+i+1}));}
+    assert.ok(!orders.fills(owner).some(f=>f.id===original.id));const scope={exchange:"binance",symbol:"SOLUSDT",from:Math.floor(b.receivedAt/1000)-1,to:Math.floor(b.receivedAt/1000)+2},history=orders.chartFills(owner,scope);
+    assert.equal(history.fills.length,1);assert.equal(history.fills[0].id,original.id);assert.equal(history.fills[0].base,"SOL");assert.equal(history.fills[0].exchange,"binance");assert.equal(history.truncated,false);
+    const other=a.createGuest().session.ownerId;paper.read(other);assert.deepEqual(orders.chartFills(other,scope).fills,[]);
+    assert.deepEqual(orders.chartFills(owner,{...scope,from:scope.to,to:scope.to+1}).fills,[]);
+  }finally{a.close();}
+});
+
 test("bought assets and their reservations cannot be spent on a different exchange",()=>{
   const {a,owner,paper,orders}=setup();try{
     const pair:TradingPair={exchange:"bybit",marketType:"spot",symbol:"HYPEUSDT",baseAsset:"HYPE",quoteAsset:"USDT"},depth={...book(77.4,100),exchange:"bybit" as const,symbol:"HYPEUSDT"};

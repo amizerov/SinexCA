@@ -5,6 +5,7 @@ import {paperDecimals,MAX_BALANCE_UNITS} from "@/lib/paper/account";
 import {cash,cashNotional,notional,demoFee,quantityAtoms,isOpen,type DemoOrder,type DemoFill,type OrderInput} from "@/lib/paper/orders";
 import type {TradingPair} from "@/lib/market/types";
 import type {OrderBook} from "@/lib/market/orderbook/model";
+import {readChartFills,type ChartTradeScope} from "./paper-chart-trades";
 import {readPaperPortfolio} from "./paper-portfolio";
 import {EXCHANGES} from "@/lib/market/exchange-config";
 export class DemoOrders {
@@ -12,6 +13,7 @@ export class DemoOrders {
   list(owner:string){const id=new PaperStore(this.db).read(owner).id;return this.byAccount(id);}
   byAccount(id:string):DemoOrder[]{return this.db.prepare("SELECT data FROM demo_orders WHERE account_id=? ORDER BY (json_extract(data,'$.status') IN('open','partially_filled')) DESC,rowid DESC LIMIT 500").all(id).map(r=>JSON.parse(String(r.data)));}
   active():DemoOrder[]{return this.db.prepare("SELECT data FROM demo_orders WHERE json_extract(data,'$.status') IN('open','partially_filled') ORDER BY rowid").all().map(r=>JSON.parse(String(r.data)));}
+  chartFills(owner:string,scope:ChartTradeScope){return readChartFills(this.db,owner,scope);}
   fills(owner:string):DemoFill[]{const id=new PaperStore(this.db).read(owner).id;return this.db.prepare("SELECT f.data,o.data AS order_data FROM demo_fills f JOIN demo_orders o ON o.id=f.order_id WHERE o.account_id=? ORDER BY f.rowid DESC LIMIT 200").all(id).map(r=>{const order:DemoOrder=JSON.parse(String(r.order_data));return {...JSON.parse(String(r.data)),exchange:order.exchange,symbol:order.symbol,base:order.base,quote:order.quote,side:order.side};});}
   private transaction<T>(fn:()=>T):T{this.db.exec("BEGIN IMMEDIATE");try{const result=fn();this.db.exec("COMMIT");return result;}catch(e){this.db.exec("ROLLBACK");throw e;}}
   private save(o:DemoOrder,changed=true){if(changed)o.updatedAt=Math.max(Date.now(),o.updatedAt+1);this.db.prepare("UPDATE demo_orders SET data=? WHERE id=?").run(JSON.stringify(o),o.id);}
