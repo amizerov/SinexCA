@@ -17,8 +17,8 @@ let pending:Promise<Session>|null=null;
 function loadSession() {
   return pending??=(async()=>{const response=await fetch("/api/auth/session",{cache:"no-store"});const result=await response.json();if(!response.ok) throw new Error(result.error?.message);return result.data as Session;})().finally(()=>{pending=null;});
 }
-export function AccountProvider({children}:{children:ReactNode}) {
-  const [session,setSession]=useState<Session|null>(null);
+export function AccountProvider({children,initialSession=null}:{children:ReactNode;initialSession?:Session|null}) {
+  const [session,setSession]=useState<Session|null>(initialSession);
   const refresh=useCallback(async()=>{try{setSession(await loadSession());}catch{/* Quotes remain usable if account storage is temporarily unavailable. */}},[]);
   const changed=useCallback(async()=>{await refresh();try{localStorage.setItem("sinex:account",crypto.randomUUID());}catch{/* Storage may be blocked; the focus handler still refreshes other tabs. */}},[refresh]);
   useEffect(()=>{

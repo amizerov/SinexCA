@@ -52,6 +52,7 @@ export function MarketDashboard() {
   const [sort, setSort] = useState<"volume" | "change" | "name">("volume");
   const [now, setNow] = useState<number>();
   const pair = selectedPair(pairs.data,selected,selectedQuote||config.quote);
+  const workspacePair=useMemo<TradingPair>(()=>pair??{exchange,marketType:"spot",symbol:"",baseAsset:selected,quoteAsset:selectedQuote||config.quote},[pair,exchange,selected,selectedQuote,config.quote]);
   const quote = pair?.quoteAsset||(listQuote==="all"?config.quote:listQuote);
   const preferences=useIndicatorPreferences(session?.ownerId,pair?{exchange,marketType:"spot",symbol:pair.symbol}:undefined);
   const tickers = useMarketTickers(exchange,pairs.data,pair,listQuote);
@@ -90,13 +91,13 @@ export function MarketDashboard() {
     updateWorkspace({exchange:next,selected:pair?.baseAsset||selected,selectedQuote:pair?.quoteAsset||selectedQuote,timeframe:nearestTimeframe(next,timeframe)});
   }
 
-  const marketColumn=marketsOpen&&marketPanel.mode!=="floating",tradeColumn=tradesOpen&&!!pair&&tradesDocked&&wide;
+  const marketColumn=marketsOpen&&marketPanel.mode!=="floating",tradeColumn=tradesOpen&&!!session&&tradesDocked&&wide;
   const markets=marketsOpen?<MarketsPanel inColumn={marketColumn} exchange={exchange} pairs={list} total={pairs.data?.length} selected={pair?.symbol} tickers={tickerMap} ticks={tickers.status==="live"?tickers.ticks:undefined}
         search={search} setSearch={setSearch} quote={listQuote} currencies={currencies} catalogReady={!!catalog.data}
         setQuote={value=>updateWorkspace({quote:value,selected:pair?.baseAsset||selected,selectedQuote:value==="all"?pair?.quoteAsset||selectedQuote:value})}
         sort={effectiveSort} setSort={setSort} statsReady={statsReady} volumeAvailable={volumeAvailable} changeAvailable={changeAvailable}
         loading={listLoading} error={pairs.error} refresh={pairs.refresh} select={setSelected}/>:undefined;
-  const trades=tradesOpen&&pair?<TradesPanel inColumn={tradeColumn} key={`trades:${session?.ownerId}:${pair.exchange}:${pair.symbol}`} pair={pair} trades={tickers.trades} status={tickers.status} connection={tickers.connection} demo={orders.data} error={orders.error}/>:undefined;
+  const trades=tradesOpen&&session?<TradesPanel inColumn={tradeColumn} key={`trades:${session.ownerId}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} trades={pair?tickers.trades:[]} status={pair?tickers.status:"connecting"} connection={pair?tickers.connection:undefined} demo={orders.data} error={orders.error}/>:undefined;
   const tapeSide=tradesSide==="auto"?(marketPanel.mode==="left"?"left":"right"):tradesSide;
   return <PanelDockProvider><div className="app-shell">
     <header className="topbar">
@@ -110,7 +111,7 @@ export function MarketDashboard() {
     <div className="workspace">
       {!marketColumn&&markets}
       {(["left","right"] as const).map(side=>(marketColumn&&marketPanel.mode===side||tradeColumn&&tapeSide===side)&&<TerminalSideColumn key={`column:${side}`} side={side} markets={marketColumn&&marketPanel.mode===side?markets:undefined} trades={tradeColumn&&tapeSide===side?trades:undefined}/>)}
-      {orderBookOpen&&pair&&<OrderBookDialog key={`orderbook:${session?.ownerId}:${pair.exchange}:${pair.symbol}`} pair={pair} lastPrice={lastPrice} close={()=>setOrderBookOpen(false)}/>}
+      {orderBookOpen&&session&&<OrderBookDialog key={`orderbook:${session.ownerId}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} lastPrice={lastPrice} close={()=>setOrderBookOpen(false)}/>}
       {!tradeColumn&&trades}
       <main className="main-content">
         <section className="asset-header" aria-label="Выбранная пара">
@@ -133,9 +134,9 @@ export function MarketDashboard() {
             {!marketsOpen&&<button className="button markets-toggle-button" disabled={!session} onClick={()=>updateWorkspace({marketsOpen:true})} aria-label="Показать рынки" title="Показать список пар"><PanelRight size={14}/><span>Рынки</span></button>}
             {!tradesOpen&&<button className="button trades-toggle-button" disabled={!pair||!session} onClick={()=>updateWorkspace({tradesOpen:true})} aria-label="Показать сделки" title="Показать сделки"><Activity size={14}/><span>Сделки</span></button>}
           </div>
-          <CandlestickChart fills={chartTrades.fills} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={orders.data?.account.portfolio?.positions||[]} onCancelOrder={o=>{void orders.request({action:"cancel",id:o.id}).catch(e=>window.alert(e instanceof Error?e.message:"Не удалось отменить заявку"));}} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} retry={refresh} />
+          <CandlestickChart fills={chartTrades.fills} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={orders.data?.account.portfolio?.positions||[]} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} retry={refresh} />
         </section>
-        <DemoOrdersPanel orders={orders}/>
+        <DemoOrdersPanel orders={orders} onSelect={order=>{setSearch("");updateWorkspace({exchange:order.exchange,selected:order.base,selectedQuote:order.quote,quote:order.quote,timeframe:nearestTimeframe(order.exchange,timeframe)});}}/>
       </main>
     </div>
     {coinInfoOpen&&pair&&<CoinInfoDialog key={`${pair.exchange}:${pair.symbol}`} pair={pair} ticker={ticker} lastPrice={lastPrice} usdtUsdRate={usdtUsdRate} close={()=>setCoinInfoOpen(false)}/>}

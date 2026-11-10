@@ -12,21 +12,16 @@ import {useFloatingWindow} from "@/hooks/use-floating-window";
 import {useOrderBookDock} from "@/hooks/use-order-book-dock";
 import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
 
-export function OrderBookDialog({pair,lastPrice,close}:{pair:TradingPair;lastPrice?:number;close:()=>void}){
-  const root=useRef<HTMLElement>(null),scroll=useRef<HTMLDivElement>(null),menu=useRef<HTMLDivElement>(null),menuButton=useRef<HTMLButtonElement>(null);
+export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:TradingPair;lastPrice?:number;close:()=>void;pending?:boolean}){
+  const root=useRef<HTMLElement>(null),menu=useRef<HTMLDivElement>(null),menuButton=useRef<HTMLButtonElement>(null);
   const titleId=useId(),contextId=useId(),menuId=useId();
-  const {book,error,mode,stale,refresh}=useOrderBook(pair),floating=useFloatingWindow(),preferences=useWorkspacePreferences();
+  const {book,error,mode,stale,refresh}=useOrderBook(pair,!pending),floating=useFloatingWindow(),preferences=useWorkspacePreferences();
   const settings=preferences.settings.orderBookSettings;
   const marketKey=`${pair.exchange}:${pair.marketType}:${pair.symbol}`,priceStep=settings.priceSteps[marketKey]??settings.priceSteps["legacy:default"]??0;
   const save=(patch:Partial<OrderBookSettings>)=>preferences.update({orderBookSettings:{...settings,...patch}});
   const dock=useOrderBookDock(settings.width,width=>save({width})),docked=settings.mode==="docked"&&dock.wide;
   const [menuPosition,setMenuPosition]=useState<{left:number;top:number}|null>(null);
-  const hasBook=!!book;
   useEffect(()=>{root.current?.focus({preventScroll:true});},[]);
-  useEffect(()=>{
-    const node=scroll.current,spread=node?.querySelector<HTMLElement>(".book-spread");
-    if(hasBook&&node&&spread)node.scrollTop+=spread.getBoundingClientRect().top-node.getBoundingClientRect().top-node.clientHeight/2+spread.clientHeight/2;
-  },[hasBook,docked,floating.layout.height,settings.side,settings.levels,priceStep]);
   useEffect(()=>{
     if(!menuPosition)return;
     const outside=(event:globalThis.PointerEvent)=>{if(!menu.current?.contains(event.target as Node)&&!menuButton.current?.contains(event.target as Node))setMenuPosition(null);};
@@ -83,7 +78,7 @@ export function OrderBookDialog({pair,lastPrice,close}:{pair:TradingPair;lastPri
         <span role="columnheader">Кол-во <small>{pair.baseAsset}</small></span>
         <span role="columnheader">Сумма <small>{pair.quoteAsset}</small></span>
       </div>
-      <div ref={scroll} className="book-depth-scroll">{!book?<p className="book-empty">{error?"Нет данных":"Загрузка заявок…"}</p>:<>
+      <div className="book-depth-scroll" data-side={settings.side}>{!book?<p className="book-empty">{error?"Нет данных":"Загрузка заявок…"}</p>:<>
         {settings.side!=="buy"&&renderSide(display.asks,true)}
         <div className="book-spread">
           <span className="book-total-buy" style={{"--depth":`${totalBids/maximumTotal*100}%`} as CSSProperties} data-book-total="buy" title={`Покупки: ${bookAmount(totalBids)} ${pair.baseAsset} по ${bids.length} загруженным уровням`}>Σ {bookAmount(totalBids)} <small>{pair.baseAsset}</small></span>

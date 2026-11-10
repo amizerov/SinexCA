@@ -33,11 +33,14 @@ try{
   const bid=dialog.locator(".book-bids .book-row").first(),ask=dialog.locator(".book-asks .book-row").last();
   assert.equal(await bid.getByRole("cell").nth(1).textContent(),"2");assert.equal(await ask.getByRole("cell").nth(1).textContent(),"3");
   assert.equal(await dialog.locator('[data-book-total="buy"]').textContent(),"Σ 40 BTC");assert.equal(await dialog.locator('[data-book-total="sell"]').textContent(),"Σ 60 BTC");
+  async function checkCenteredBook(){assert.ok(await dialog.locator('.book-depth-scroll').evaluate(node=>{const box=node.getBoundingClientRect(),spread=node.querySelector('.book-spread').getBoundingClientRect();return getComputedStyle(node).overflowY==='clip'&&node.scrollTop===0&&Math.abs((spread.top+spread.bottom-box.top-box.bottom)/2)<1;}),'Spread remains centered without a scroll container');}
+  await checkCenteredBook();
   const initial=await dialog.boundingBox();assert.ok(initial.width<=310);
   const header=dialog.locator(".orderbook-window-header"),head=await header.boundingBox();
   await page.mouse.move(head.x+40,head.y+16);await page.mouse.down();await page.mouse.move(head.x-460,head.y+76,{steps:8});await page.mouse.up();
   const moved=await dialog.boundingBox();assert.ok(moved.x<initial.x-400);assert.ok(moved.y>initial.y+40);
   await page.mouse.move(moved.x+moved.width-3,moved.y+moved.height-3);await page.mouse.down();await page.mouse.move(moved.x+moved.width+77,moved.y+moved.height+97,{steps:8});await page.mouse.up();
+  await checkCenteredBook();
   const resized=await dialog.boundingBox();assert.ok(resized.width>moved.width+60);assert.ok(resized.height>moved.height+80);
   const interval=page.getByRole("button",{name:"1m",exact:true});await interval.click();assert.equal(await interval.getAttribute("aria-pressed"),"true");assert.equal(await dialog.isVisible(),true,"Chart stays interactive while the book is open");
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("sinex:workspace:guest")).settings.orderBookWindow);assert.equal(saved.width,resized.width);

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {createPortal} from "react-dom";
 import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode,LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp,type IPriceLine } from "lightweight-charts";
 import { Expand, Minimize, ScanLine, BarChart3,SlidersHorizontal,MapPin } from "lucide-react";
@@ -12,15 +12,16 @@ import type { useIndicatorPreferences } from "@/hooks/use-indicator-preferences"
 import { useChartIndicators } from "@/hooks/use-chart-indicators";
 import { useBrowserTimeZone } from "@/hooks/use-browser-time-zone";
 import { chartTimeFormatters } from "@/lib/market/chart-time";
-import {isOpen,orderLabel,type DemoOrder,type DemoFill} from "@/lib/paper/orders";
+import {type DemoOrder,type DemoFill} from "@/lib/paper/orders";
 import type {OrderDraft} from "./DemoTrading";
 import type {PaperPosition} from "@/lib/paper/portfolio";
 import {useExecutionMarkers} from "@/hooks/use-execution-markers";
 import {ExecutionTooltip} from "./ExecutionTooltip";
+import {CURRENT_PRICE_COLOR,orderColor,orderLevels} from "@/lib/paper/order-levels";
 import {DemoOrderMarkers} from "./DemoOrderMarkers";
 
-interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onCancelOrder?:(o:DemoOrder)=>void;onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string; retry: () => void }
-export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onCancelOrder,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error, retry }: Props) {
+interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string; retry: () => void }
+export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error, retry }: Props) {
   const {session}=useAccount();
   const timeZone=useBrowserTimeZone();
   const container = useRef<HTMLDivElement>(null);
@@ -34,11 +35,9 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   const [showTrades,setShowTrades]=useState(true);
   const [context,setContext]=useState<{x:number;y:number;price:number}>();
   useEffect(()=>{if(!context)return;const close=()=>setContext(undefined);window.addEventListener("pointerdown",close);window.addEventListener("keydown",close);return()=>{window.removeEventListener("pointerdown",close);window.removeEventListener("keydown",close);};},[context]);
-  useEffect(()=>{
-    const source=series.current;if(!source)return;const lines:IPriceLine[]=[];
-    for(const o of orders||[]){if(!isOpen(o)||o.exchange!==exchange||o.symbol!==symbol)continue;for(const [value,label] of [[o.limit,"Limit"],[!o.triggered?o.stop:null,"Stop"]] as const){if(value)lines.push(source.createPriceLine({price:value,color:o.side==="buy"?"#9bd67a":"#ec7775",lineWidth:1,lineStyle:LineStyle.Dashed,axisLabelVisible:true,title:`DEMO ${orderLabel(o)} · ${label}`}));}}
-    return()=>{if(series.current===source)for(const line of lines)source.removePriceLine(line);};
-  },[orders,exchange,symbol]);
+  const activeOrders=useMemo(()=>(orders||[]).filter(o=>o.exchange===exchange&&o.symbol===symbol),[orders,exchange,symbol]);
+  const pendingLevels=useMemo(()=>orderLevels(activeOrders),[activeOrders]);
+
   const showVolume=preferences.settings.volume;
   const [indicatorDialog,setIndicatorDialog]=useState(false);
   const indicatorNames=[...preferences.settings.ema.filter(line=>line.enabled).map(line=>`EMA ${line.period}`),...preferences.settings.sma.enabled?[`SMA ${preferences.settings.sma.period}`]:[],...preferences.settings.rsi.enabled?[`RSI ${preferences.settings.rsi.period}`]:[]];
@@ -67,7 +66,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     });
     chart.current = instance;
     needsViewport.current=true;
-    series.current = instance.addSeries(CandlestickSeries, { upColor: "#9bd67a", downColor: "#ec7775", borderVisible: false, wickUpColor: "#9bd67a", wickDownColor: "#ec7775", priceLineColor: "#9bd67a" });
+    series.current = instance.addSeries(CandlestickSeries, { upColor: "#9bd67a", downColor: "#ec7775", borderVisible: false, wickUpColor: "#9bd67a", wickDownColor: "#ec7775", priceLineColor:CURRENT_PRICE_COLOR,priceLineVisible:false,lastValueVisible:false });
     volume.current = instance.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume", lastValueVisible: false, priceLineVisible: false }, 1);
     instance.panes()[0].setStretchFactor(5);
     instance.panes()[1].setStretchFactor(1);
@@ -110,6 +109,12 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     previous.current = { key, candles };
     container.current?.dispatchEvent(new Event("sinex:chart-layout", { bubbles: true }));
   }, [candles, exchangeName, symbol, timeframe]);
+  useEffect(()=>{
+    const source=series.current;if(!source)return;const attached=()=>series.current===source;
+    const lines=[...new Map(pendingLevels.map(level=>[level.price,level.order.side])).entries()].map(([value,side])=>source.createPriceLine({price:value,color:orderColor(side),lineWidth:1,lineStyle:LineStyle.Dashed,axisLabelVisible:true,axisLabelColor:"#142019",axisLabelTextColor:orderColor(side),title:""}));
+    return()=>{if(attached())for(const line of lines)source.removePriceLine(line);};
+  },[pendingLevels]);
+
 
   useEffect(() => {
     const instance=chart.current;if(!instance)return;
@@ -121,10 +126,10 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   useChartIndicators(chart,history,candles,preferences.settings,container);
   useEffect(()=>{
     const source=series.current;if(!source)return;
-    source.applyOptions({lastValueVisible:tickPrice===undefined,priceLineVisible:tickPrice===undefined});
-    if(tickPrice===undefined){if(tradeLine.current){source.removePriceLine(tradeLine.current);tradeLine.current=null;}return;}
-    const last=candles.at(-1),color=tickPrice>=(last?.open??tickPrice)?"#9bd67a":"#ec7775";
-    const options={price:tickPrice,color,lineWidth:1 as const,lineStyle:LineStyle.Dotted,axisLabelVisible:true,title:""};
+    source.applyOptions({lastValueVisible:false,priceLineVisible:false});
+    const currentPrice=tickPrice??candles.at(-1)?.close;
+    if(currentPrice===undefined){if(tradeLine.current){source.removePriceLine(tradeLine.current);tradeLine.current=null;}return;}
+    const options={price:currentPrice,color:CURRENT_PRICE_COLOR,axisLabelColor:CURRENT_PRICE_COLOR,axisLabelTextColor:"#10232c",lineWidth:1 as const,lineStyle:LineStyle.Dotted,axisLabelVisible:true,title:""};
     if(tradeLine.current)tradeLine.current.applyOptions(options);else tradeLine.current=source.createPriceLine(options);
   },[tickPrice,candles]);
   useEffect(()=>{
@@ -164,7 +169,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
       {showTrades&&executions.tooltip&&<ExecutionTooltip {...executions.tooltip}/>}
       {showTrades&&executions.average!==undefined&&<div className="chart-entry-summary" data-entry-price={executions.average} title="Средняя себестоимость остатка с комиссией покупки. Пунктир — ориентир безубыточности с DEMO-комиссией продажи 0,1%. Процент сравнивает текущую цену с этим ориентиром, без оценки глубины стакана."><span>Вход {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:8}).format(executions.average)} {executions.quote}</span>{basisChange!==undefined&&<strong className={basisChange>=0?"positive":"negative"}>{basisChange>0?"+":""}{basisChange.toFixed(2)}%</strong>}</div>}
       {showTrades&&(tradesError||tradesTruncated||executions.grouped.outside>0)&&<span className="chart-trades-warning" role="status">{tradesError||(tradesTruncated?"Показаны последние 10 000 исполнений диапазона":`${executions.grouped.outside} исполнений без свечи в истории`)}</span>}
-      {onOrder&&onCancelOrder&&<DemoOrderMarkers chart={chart} series={series} container={container} orders={(orders||[]).filter(o=>o.exchange===exchange&&o.symbol===symbol)} onEdit={order=>onOrder({order,price:order.limit??order.stop??tickPrice??1,side:order.side,type:order.type})} onCancel={onCancelOrder}/>}
+      {onOrder&&<DemoOrderMarkers chart={chart} series={series} container={container} orders={activeOrders} onInspect={order=>onOrder({order,price:order.limit??order.stop??tickPrice??1,side:order.side,type:order.type})}/>}
       {context&&createPortal(<div className="demo-chart-menu" role="menu" aria-label="Действия с ценой" style={{left:context.x,top:context.y}} onPointerDown={e=>e.stopPropagation()}>{(["buy","sell"] as const).map(side=><button role="menuitem" key={side} onClick={()=>{onOrder?.({side,price:context.price,type:"limit"});setContext(undefined);}}>{side==="buy"?"Купить":"Продать"} · Лимит</button>)}<button role="menuitem" onClick={()=>{onOrder?.({side:"buy",price:context.price,type:"stop_limit"});setContext(undefined);}}>Новая стоп-заявка…</button><button role="menuitem" onClick={()=>{void navigator.clipboard?.writeText(String(context.price));setContext(undefined);}}>Копировать цену</button></div>,document.body)}
       {session&&<ChartDrawings key={`${session.ownerId}:${exchange}:spot:${symbol}`} ownerId={session.ownerId} scope={{ exchange, marketType: "spot", symbol }} chart={chart} series={series} candles={candles} />}
       {!candles.length && <div className="chart-overlay" role="status">{loading ? <><span className="loader" /><strong>Загружаем историю рынка</strong><span>История {exchangeName} Spot</span></> : <><strong>{error ? "Данные пока недоступны" : "Выберите торговую пару"}</strong>{error && <><span>{error}</span><button className="button" onClick={retry}>Повторить загрузку</button></>}</>}</div>}

@@ -16,7 +16,7 @@ import {TradesPlacementMenu} from "./TradesPlacementMenu";
 import type {TradeConnection} from "@/lib/market/trades/stream";
 const timeFormat=new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 const dateFormat=new Intl.DateTimeFormat("ru-RU",{dateStyle:"short",timeStyle:"medium"});
-export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=false}:{pair:TradingPair;trades:TradeTick[];status:StreamStatus;connection?:TradeConnection;demo?:DemoState;error?:string;inColumn?:boolean}){
+export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=false,pending=false}:{pair:TradingPair;trades:TradeTick[];status:StreamStatus;connection?:TradeConnection;demo?:DemoState;error?:string;inColumn?:boolean;pending?:boolean}){
   const preferences=useWorkspacePreferences(),settings=preferences.settings,window=useFloatingWindow("trades"),title=useId(),tabs=useId(),panel=useId();
   const dock=useOrderBookDock(settings.tradesWidth,width=>preferences.update({tradesWidth:width}),260,480),docked=settings.tradesDocked&&dock.wide;
   const placement=usePanelDock();
@@ -47,7 +47,7 @@ export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=f
         {rows.map((t,i)=><div role="row" className="trade-tape-row" key={`${t.id}:${i}`} title={`${t.side==="buy"?"Покупка":t.side==="sell"?"Продажа":"Направление не указано"} · ${dateFormat.format(t.time)}${mine?" · DEMO":""}`}>
           <span role="cell" className={t.side==="buy"?"positive":t.side==="sell"?"negative":""}>{bookNumber(t.price)}</span><span role="cell">{t.quantity===undefined?"—":bookNumber(t.quantity)}</span><time role="cell" dateTime={new Date(t.time).toISOString()}>{timeFormat.format(t.time)}</time>
         </div>)}
-        {!rows.length&&<p className="trades-empty">{mine?"Ваших тестовых исполнений по этой паре пока нет":"Ожидаем сделки выбранной пары…"}</p>}
+        {!rows.length&&<p className="trades-empty">{pending?"Загружаем пару…":mine?"Ваших тестовых исполнений по этой паре пока нет":"Ожидаем сделки выбранной пары…"}</p>}
       </div>
     </div>
     {docked?!inColumn&&<div className="trades-dock-resize" role="separator" tabIndex={0} aria-label="Ширина сделок" aria-orientation="vertical" aria-valuenow={dock.width} aria-valuemin={260} aria-valuemax={480} onPointerDown={dock.start} onPointerMove={e=>dock.move(e,true)} onPointerUp={dock.end} onPointerCancel={dock.end} onKeyDown={e=>dock.key(e,true)}/>

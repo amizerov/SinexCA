@@ -3,9 +3,10 @@ import {useEffect,useState} from "react";
 import type {TradingPair} from "@/lib/market/types";
 import type {OrderBook} from "@/lib/market/orderbook/model";
 import {subscribeBook} from "@/lib/market/orderbook/stream";
-export function useOrderBook(pair:TradingPair){
+export function useOrderBook(pair:TradingPair,enabled=true){
   const [book,setBook]=useState<OrderBook>(),[error,setError]=useState(""),[mode,setMode]=useState<"connecting"|"ws"|"rest">("connecting"),[now,setNow]=useState(0),[revision,setRevision]=useState(0);
   useEffect(()=>{
+    if(!enabled)return;
     const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined,wsVersion=0,lastWs=0,failures=0;
     const stop=subscribeBook(pair,data=>{if(controller.signal.aborted)return;wsVersion++;lastWs=Date.now();setBook(data);setError("");setMode("ws");},live=>{if(!live&&!controller.signal.aborted){lastWs=0;setMode(previous=>previous==="ws"?"rest":previous);}});
     async function poll(){
@@ -25,7 +26,7 @@ export function useOrderBook(pair:TradingPair){
     }
     void poll();const clock=setInterval(()=>setNow(Date.now()),1000);
     return()=>{controller.abort();stop();clearTimeout(timer);clearInterval(clock);};
-  },[pair,revision]);
+  },[pair,revision,enabled]);
   const stale=!!book&&!!now&&now-book.receivedAt>5000;
   return {book,error,mode,stale,refresh:()=>setRevision(value=>value+1)};
 }
