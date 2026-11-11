@@ -205,7 +205,7 @@ export function ChartDrawings({ ownerId, scope, chart, series, candles }: Props)
       <button className="icon-button" aria-label="Удалить уровень" title="Удалить уровень (Delete)" onClick={() => { drawing.commit(drawing.levels.filter(level => level.id !== selected.id)); setSelectedId(null); }}><Trash2 size={15} /></button>
       <button className="icon-button" aria-label="Закрыть настройки уровня" onClick={() => setSelectedId(null)}><X size={14} /></button>
     </div>}
-    <span className="drawing-save-status" role="status" data-save-status={drawing.status}>{dragging ? "Перенос уровня…" : drawing.status === "loading" ? "Загрузка уровней…" : drawing.status === "saving" ? "Сохранение…" : drawing.status === "saved" ? `Сохранённые уровни: ${drawing.levels.length}` : "Уровни не сохранены"}</span>
+    {(dragging || drawing.status !== "saved") && <span className="drawing-save-status" role="status" data-save-status={drawing.status}>{dragging ? "Перенос уровня…" : drawing.status === "loading" ? "Загрузка уровней…" : drawing.status === "saving" ? "Сохранение…" : "Уровни не сохранены"}</span>}
     {(drawing.status === "error" || drawing.status === "conflict") && <div className="drawing-notice" role="alert" onPointerDown={e => e.stopPropagation()}><span>{drawing.error}</span><button className="button" onClick={drawing.status === "conflict" ? drawing.reload : drawing.retry}>{drawing.status === "conflict" ? "Загрузить из базы" : "Повторить"}</button></div>}
   </div>;
 }

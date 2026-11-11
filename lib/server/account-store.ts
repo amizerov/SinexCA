@@ -185,7 +185,7 @@ export class AccountStore {
   }
   google(sub: string, email: string, current: AccountSession,profile:{displayName:string|null;avatarUrl:string|null}={displayName:null,avatarUrl:null}) {
     // Linking must be explicit and limited to the signed-in account's verified email.
-    if (current.user && current.user.email !== email) throw new AccountError("Выберите Google-аккаунт с email текущего аккаунта Sinex broker.", 409);
+    if (current.user && current.user.email !== email) throw new AccountError("Выберите Google-аккаунт с email текущего аккаунта Sinex.", 409);
     this.db.exec("BEGIN IMMEDIATE");
     try {
       let user = this.db.prepare("SELECT * FROM account_users WHERE google_sub=?").get(sub);
@@ -208,7 +208,7 @@ export class AccountStore {
     }catch(error){this.db.exec("ROLLBACK");throw error;}
   }
   yandex(sub:string,email:string,current:AccountSession,profile:{displayName:string|null;avatarUrl:string|null}){
-    if(current.user&&current.user.email!==email)throw new AccountError("Выберите Яндекс-аккаунт с email текущего аккаунта Sinex broker.",409);
+    if(current.user&&current.user.email!==email)throw new AccountError("Выберите Яндекс-аккаунт с email текущего аккаунта Sinex.",409);
     this.db.exec("BEGIN IMMEDIATE");
     try{
       let user=this.db.prepare("SELECT * FROM account_users WHERE yandex_sub=?").get(sub);
