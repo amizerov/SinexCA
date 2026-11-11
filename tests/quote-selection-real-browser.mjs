@@ -7,7 +7,7 @@ try{
   page.on("pageerror",error=>errors.push(error.message));
   // Isolate the quote/candle REST check from external browser network permissions.
   await context.routeWebSocket(/wss:\/\//,socket=>socket.close());
-  await page.goto(baseURL);await page.locator('[aria-label="Показать стакан"]:enabled').waitFor({timeout:30000});await page.getByRole("button",{name:"Coinbase",exact:true}).click();await page.locator(".asset-identity p").filter({hasText:"Coinbase"}).waitFor();
+  await page.goto(baseURL);await page.locator(".book-terminal").waitFor({timeout:30000});await page.getByRole("button",{name:"Coinbase",exact:true}).click();await page.locator(".asset-identity p").filter({hasText:"Coinbase"}).waitFor();
   const search=page.getByRole("textbox",{name:"Поиск торговой пары"}),selector=page.getByRole("combobox",{name:"Валюта котировки",exact:true});
   await search.fill("SOL");await page.locator(".pair-row").filter({has:page.locator(".pair-name strong").filter({hasText:/^SOL\/USD$/})}).click({timeout:30000});
   for(const quote of ["USD","USDT","BTC","EUR"]){

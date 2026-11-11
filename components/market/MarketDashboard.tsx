@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState,useCallback } from "react";
 import Link from "next/link";
-import { RefreshCw, ListOrdered,PanelRight,Activity } from "lucide-react";
+import { RefreshCw, ListOrdered,PanelRight,Activity,CircleHelp } from "lucide-react";
 import { useMarketResource } from "@/hooks/use-market-resource";
 import { useMarketCandles } from "@/hooks/use-market-candles";
 import { useMarketTickers } from "@/hooks/use-market-tickers";
@@ -29,6 +29,7 @@ import {TerminalSideColumn} from "./TerminalSideColumn";
 import {PanelDockProvider} from "./PanelDock";
 import {useChartTrades} from "@/hooks/use-chart-trades";
 import {useDockViewport} from "@/hooks/use-order-book-dock";
+import {ThemeToggle} from "@/components/ThemeToggle";
 
 export function MarketDashboard() {
   const {session}=useAccount();
@@ -91,27 +92,29 @@ export function MarketDashboard() {
     updateWorkspace({exchange:next,selected:pair?.baseAsset||selected,selectedQuote:pair?.quoteAsset||selectedQuote,timeframe:nearestTimeframe(next,timeframe)});
   }
 
-  const marketColumn=marketsOpen&&marketPanel.mode!=="floating",tradeColumn=tradesOpen&&!!session&&tradesDocked&&wide;
+  const marketColumn=marketsOpen&&marketPanel.mode!=="floating",tradeColumn=tradesOpen&&tradesDocked&&wide;
   const markets=marketsOpen?<MarketsPanel inColumn={marketColumn} exchange={exchange} pairs={list} total={pairs.data?.length} selected={pair?.symbol} tickers={tickerMap} ticks={tickers.status==="live"?tickers.ticks:undefined}
         search={search} setSearch={setSearch} quote={listQuote} currencies={currencies} catalogReady={!!catalog.data}
         setQuote={value=>updateWorkspace({quote:value,selected:pair?.baseAsset||selected,selectedQuote:value==="all"?pair?.quoteAsset||selectedQuote:value})}
         sort={effectiveSort} setSort={setSort} statsReady={statsReady} volumeAvailable={volumeAvailable} changeAvailable={changeAvailable}
         loading={listLoading} error={pairs.error} refresh={pairs.refresh} select={setSelected}/>:undefined;
-  const trades=tradesOpen&&session?<TradesPanel inColumn={tradeColumn} key={`trades:${session.ownerId}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} trades={pair?tickers.trades:[]} status={pair?tickers.status:"connecting"} connection={pair?tickers.connection:undefined} demo={orders.data} error={orders.error}/>:undefined;
+  const trades=tradesOpen?<TradesPanel inColumn={tradeColumn} key={`trades:${session?.ownerId??"guest"}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} trades={pair?tickers.trades:[]} status={pair?tickers.status:"connecting"} connection={pair?tickers.connection:undefined} demo={orders.data} error={orders.error}/>:undefined;
   const tapeSide=tradesSide==="auto"?(marketPanel.mode==="left"?"left":"right"):tradesSide;
   return <PanelDockProvider><div className="app-shell">
     <header className="topbar">
-      <Link href="/" className="brand" aria-label="Sinex broker — главная"><span className="brand-mark"><BrandMark size={24} /></span><span className="brand-name">Sinex<small>broker</small></span></Link>
+      <Link href="/" className="brand" aria-label="Sinex — главная"><span className="brand-mark"><BrandMark size={24} /></span><span className="brand-name">Sinex<small>terminal</small></span></Link>
       <div className="exchange-controls">
         <div className="exchange-tabs" role="group" aria-label="Биржи">{EXCHANGE_IDS.map(id => <button key={id} aria-pressed={exchange === id} onClick={() => changeExchange(id)}>{EXCHANGES[id].name}</button>)}</div>
         <select className="exchange-select" aria-label="Биржа" value={exchange} onChange={e => changeExchange(e.target.value as ExchangeId)}>{EXCHANGE_IDS.map(id => <option key={id} value={id}>{EXCHANGES[id].name}</option>)}</select>
       </div>
+      <ThemeToggle />
+      <Link href="/help" className="help-link" title="Справка и обучение" aria-label="Открыть справку"><CircleHelp size={17}/><span>Справка</span></Link>
       <AccountButton />
     </header>
     <div className="workspace">
       {!marketColumn&&markets}
       {(["left","right"] as const).map(side=>(marketColumn&&marketPanel.mode===side||tradeColumn&&tapeSide===side)&&<TerminalSideColumn key={`column:${side}`} side={side} markets={marketColumn&&marketPanel.mode===side?markets:undefined} trades={tradeColumn&&tapeSide===side?trades:undefined}/>)}
-      {orderBookOpen&&session&&<OrderBookDialog key={`orderbook:${session.ownerId}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} lastPrice={lastPrice} close={()=>setOrderBookOpen(false)}/>}
+      {orderBookOpen&&<OrderBookDialog key={`orderbook:${session?.ownerId??"guest"}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} lastPrice={lastPrice} close={()=>setOrderBookOpen(false)}/>}
       {!tradeColumn&&trades}
       <main className="main-content">
         <section className="asset-header" aria-label="Выбранная пара">
@@ -129,10 +132,10 @@ export function MarketDashboard() {
             <select className="timeframe-select" aria-label="Интервал свечей" value={timeframe} onChange={event=>setTimeframe(event.target.value as Timeframe)}>{availableTimeframes.map(tf=><option key={tf} value={tf}>{tf}{tf.endsWith("M")?" · мес.":""}{intervalSpec(exchange,tf).computed?" · расчётный":""}</option>)}</select>
             <span className={`stream-pill ${live && !staleCandles ? "" : "waiting"}`} role="status" title={`${!live&&tradeConnected?"WebSocket подключён, новых сделок нет; ":""}Цена: ${live?"сделки WebSocket":"REST 5с"} · ${candleStream?"свечи WebSocket":"свечи REST 15с"} · статистика 24ч: REST 60с`}><span className="status-dot" /><span>{live && !staleCandles ? "Онлайн" : tradeConnected?"WS + REST · 5с":tickers.status === "connecting" ? "Подключение…" : "REST · 5с"}</span></span>
             <button className="button refresh-button" onClick={refresh} title="Обновить данные" aria-label="Обновить"><RefreshCw size={13} className={pairs.loading || tickers.loading || market.loading ? "spinning" : ""} /><span>Обновить</span></button>
-            {!orderBookOpen&&<button className="button orderbook-button" disabled={!pair||!session} onClick={()=>setOrderBookOpen(true)} aria-label="Показать стакан" title="Показать стакан"><ListOrdered size={14}/><span>Стакан</span></button>}
+            {!orderBookOpen&&<button className="button orderbook-button" disabled={!pair} onClick={()=>setOrderBookOpen(true)} aria-label="Показать стакан" title="Показать стакан"><ListOrdered size={14}/><span>Стакан</span></button>}
             <button className="button demo-order-button" disabled={!pair||!session||!lastPrice} onClick={()=>pair&&lastPrice&&setOrderDraft({pair,price:lastPrice,side:"buy",type:"limit",ownerId:session?.ownerId})} title="Создать тестовую заявку" aria-label="Создать тестовую заявку">＋<span>Заявка</span></button>
-            {!marketsOpen&&<button className="button markets-toggle-button" disabled={!session} onClick={()=>updateWorkspace({marketsOpen:true})} aria-label="Показать рынки" title="Показать список пар"><PanelRight size={14}/><span>Рынки</span></button>}
-            {!tradesOpen&&<button className="button trades-toggle-button" disabled={!pair||!session} onClick={()=>updateWorkspace({tradesOpen:true})} aria-label="Показать сделки" title="Показать сделки"><Activity size={14}/><span>Сделки</span></button>}
+            {!marketsOpen&&<button className="button markets-toggle-button" onClick={()=>updateWorkspace({marketsOpen:true})} aria-label="Показать рынки" title="Показать список пар"><PanelRight size={14}/><span>Рынки</span></button>}
+            {!tradesOpen&&<button className="button trades-toggle-button" disabled={!pair} onClick={()=>updateWorkspace({tradesOpen:true})} aria-label="Показать сделки" title="Показать сделки"><Activity size={14}/><span>Сделки</span></button>}
           </div>
           <CandlestickChart fills={chartTrades.fills} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={orders.data?.account.portfolio?.positions||[]} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} retry={refresh} />
         </section>

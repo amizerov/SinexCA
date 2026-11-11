@@ -26,7 +26,6 @@ try{
       ws.onerror=()=>finish({exchange,status:"socket_error"});
     })));
   });console.log(JSON.stringify(report));
-  await page.getByRole("button",{name:"Показать стакан",exact:true}).click();
   const dialog=page.getByRole("dialog",{name:/^Стакан /});
   await dialog.getByRole("status",{name:"WebSocket",exact:true}).waitFor({timeout:15000});
   assert.ok(await dialog.locator(".book-bids .book-row").count()>0);

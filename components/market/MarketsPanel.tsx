@@ -11,6 +11,7 @@ import {useFloatingWindow} from "@/hooks/use-floating-window";
 import {useOrderBookDock as useDockWidth} from "@/hooks/use-order-book-dock";
 import {PairRow} from "./PairRow";
 import {usePanelDock} from "./PanelDock";
+import {useClientReady} from "@/hooks/use-client-ready";
 interface Props {
   exchange:ExchangeId;pairs:TradingPair[];total?:number;selected?:string;tickers:Map<string,Ticker>;ticks?:Map<string,TradeTick>;
   search:string;setSearch:(value:string)=>void;quote:string;currencies:string[];catalogReady:boolean;setQuote:(quote:string)=>void;
@@ -20,6 +21,7 @@ interface Props {
 export function MarketsPanel(props:Props){
   const {exchange,pairs,total,selected,tickers,ticks,search,setSearch,quote,currencies,catalogReady,setQuote,sort,setSort,statsReady,volumeAvailable,changeAvailable,loading,error,refresh,select}=props;
   const preferences=useWorkspacePreferences(),settings=preferences.settings.marketPanel,floating=useFloatingWindow("markets");
+  const clientReady=useClientReady();
   const update=preferences.update,dock=usePanelDock();
   const save=(patch:Partial<MarketPanelSettings>)=>update({marketPanel:{...settings,...patch}});
   const width=useDockWidth(settings.width,value=>save({width:value}),280,480),isFloating=settings.mode==="floating",right=settings.mode==="right";
@@ -60,7 +62,7 @@ export function MarketsPanel(props:Props){
     {isFloating?(["n","s","e","w","ne","nw","se","sw"] as const).map(edge=><div key={edge} className={`book-resize book-resize-${edge}`} onPointerDown={event=>floating.start(event,edge)} {...(edge==="se"?{role:"button",tabIndex:0,"aria-label":"Изменить размер списка пар",onKeyDown:(event:KeyboardEvent<HTMLElement>)=>floating.key(event,true)}:{"aria-hidden":true})}/> )
       :!props.inColumn&&<div className={`markets-dock-resize ${right?"on-left":"on-right"}`} role="separator" tabIndex={0} aria-label="Ширина списка пар" aria-orientation="vertical" aria-valuenow={width.width} aria-valuemin={280} aria-valuemax={480} onPointerDown={width.start} onPointerMove={event=>width.move(event,right)} onPointerUp={width.end} onPointerCancel={width.end} onLostPointerCapture={width.end} onKeyDown={event=>width.key(event,right)}/>}
   </aside>;
-  return <>{isFloating?createPortal(content,document.body):content}{menuPosition&&createPortal(<div ref={menu} className="markets-placement-menu" role="menu" aria-label="Расположение списка пар" style={menuPosition} onKeyDown={menuKeys}>
+  return <>{isFloating?clientReady?createPortal(content,document.body):null:content}{clientReady&&menuPosition&&createPortal(<div ref={menu} className="markets-placement-menu" role="menu" aria-label="Расположение списка пар" style={menuPosition} onKeyDown={menuKeys}>
     {([['right','Закрепить справа'],['left','Закрепить слева'],['floating','Плавающее окно']] as const).map(([mode,label])=><button key={mode} role="menuitemradio" aria-checked={settings.mode===mode} onClick={()=>{save({mode});setMenuPosition(null);}}>{label}</button>)}
     <button role="menuitem" onClick={()=>{setMenuPosition(null);close();}}>Скрыть список пар</button>
   </div>,document.body)}</>;

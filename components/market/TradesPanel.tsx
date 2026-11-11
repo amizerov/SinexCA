@@ -14,10 +14,12 @@ import {useOrderBookDock} from "@/hooks/use-order-book-dock";
 import {usePanelDock} from "./PanelDock";
 import {TradesPlacementMenu} from "./TradesPlacementMenu";
 import type {TradeConnection} from "@/lib/market/trades/stream";
+import {useClientReady} from "@/hooks/use-client-ready";
 const timeFormat=new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 const dateFormat=new Intl.DateTimeFormat("ru-RU",{dateStyle:"short",timeStyle:"medium"});
 export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=false,pending=false}:{pair:TradingPair;trades:TradeTick[];status:StreamStatus;connection?:TradeConnection;demo?:DemoState;error?:string;inColumn?:boolean;pending?:boolean}){
   const preferences=useWorkspacePreferences(),settings=preferences.settings,window=useFloatingWindow("trades"),title=useId(),tabs=useId(),panel=useId();
+  const clientReady=useClientReady();
   const dock=useOrderBookDock(settings.tradesWidth,width=>preferences.update({tradesWidth:width}),260,480),docked=settings.tradesDocked&&dock.wide;
   const placement=usePanelDock();
   const side=settings.tradesSide==="auto"?(settings.marketPanel.mode==="left"?"left":"right"):settings.tradesSide;
@@ -53,5 +55,5 @@ export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=f
     {docked?!inColumn&&<div className="trades-dock-resize" role="separator" tabIndex={0} aria-label="Ширина сделок" aria-orientation="vertical" aria-valuenow={dock.width} aria-valuemin={260} aria-valuemax={480} onPointerDown={dock.start} onPointerMove={e=>dock.move(e,true)} onPointerUp={dock.end} onPointerCancel={dock.end} onKeyDown={e=>dock.key(e,true)}/>
     :(["n","s","e","w","ne","nw","se","sw"] as const).map(edge=><div key={edge} className={`book-resize book-resize-${edge}`} onPointerDown={e=>window.start(e,edge)} {...edge==="se"?{role:"button",tabIndex:0,"aria-label":"Изменить размер сделок",onKeyDown:(e:KeyboardEvent<HTMLElement>)=>window.key(e,true)}:{"aria-hidden":true}}/>)}
   </section>;
-  return docked?content:createPortal(content,document.body);
+  return docked?content:clientReady?createPortal(content,document.body):null;
 }

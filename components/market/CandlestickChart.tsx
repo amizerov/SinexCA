@@ -56,15 +56,21 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   useEffect(() => {
     if (!container.current) return;
     let disposed=false;
+    const colors=()=>document.documentElement.dataset.theme==="light"
+      ? {background:"#ffffff",text:"#66756a",grid:"#e7ece6",crosshair:"#809184",crosshairLabel:"#607367",border:"#d5ded4"}
+      : {background:"#111614",text:"#7c8981",grid:"#1b231f",crosshair:"#6e8474",crosshairLabel:"#35443a",border:"#252e28"};
+    const initial=colors();
     const instance = createChart(container.current, {
-      layout: { background: { type: ColorType.Solid, color: "#111614" }, textColor: "#7c8981", fontFamily: "'Segoe UI', sans-serif", fontSize: 11, attributionLogo: true },
-      grid: { vertLines: { color: "#1b231f" }, horzLines: { color: "#1b231f" } },
-      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: "#6e8474", labelBackgroundColor: "#35443a" }, horzLine: { color: "#6e8474", labelBackgroundColor: "#35443a" } },
-      rightPriceScale: { borderColor: "#252e28", minimumWidth: 82 },
-      timeScale: { borderColor: "#252e28", timeVisible: true, secondsVisible: false, rightOffset: 6, barSpacing: 7 },
+      layout: { background: { type: ColorType.Solid, color: initial.background }, textColor: initial.text, fontFamily: "'Segoe UI', sans-serif", fontSize: 11, attributionLogo: true },
+      grid: { vertLines: { color: initial.grid }, horzLines: { color: initial.grid } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: initial.crosshair, labelBackgroundColor: initial.crosshairLabel }, horzLine: { color: initial.crosshair, labelBackgroundColor: initial.crosshairLabel } },
+      rightPriceScale: { borderColor: initial.border, minimumWidth: 82 },
+      timeScale: { borderColor: initial.border, timeVisible: true, secondsVisible: false, rightOffset: 6, barSpacing: 7 },
       localization: { locale: "ru-RU" },
     });
     chart.current = instance;
+    const syncTheme=()=>{const next=colors();instance.applyOptions({layout:{background:{type:ColorType.Solid,color:next.background},textColor:next.text},grid:{vertLines:{color:next.grid},horzLines:{color:next.grid}},crosshair:{vertLine:{color:next.crosshair,labelBackgroundColor:next.crosshairLabel},horzLine:{color:next.crosshair,labelBackgroundColor:next.crosshairLabel}},rightPriceScale:{borderColor:next.border},timeScale:{borderColor:next.border}});};
+    window.addEventListener("sinex:theme-change",syncTheme);
     needsViewport.current=true;
     series.current = instance.addSeries(CandlestickSeries, { upColor: "#9bd67a", downColor: "#ec7775", borderVisible: false, wickUpColor: "#9bd67a", wickDownColor: "#ec7775", priceLineColor:CURRENT_PRICE_COLOR,priceLineVisible:false,lastValueVisible:false });
     volume.current = instance.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume", lastValueVisible: false, priceLineVisible: false }, 1);
@@ -86,7 +92,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
       if (rect) { instance.resize(Math.floor(rect.width), Math.floor(rect.height)); container.current?.dispatchEvent(new Event("sinex:chart-layout", { bubbles: true })); }
     });
     observer.observe(container.current);
-    return () => { disposed=true;observer.disconnect();if(chart.current===instance){chart.current=null;series.current=null;volume.current=null;previous.current=null;tradeLine.current=null;}instance.remove(); };
+    return () => { disposed=true;window.removeEventListener("sinex:theme-change",syncTheme);observer.disconnect();if(chart.current===instance){chart.current=null;series.current=null;volume.current=null;previous.current=null;tradeLine.current=null;}instance.remove(); };
   }, []);
 
   useEffect(() => {

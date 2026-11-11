@@ -9,9 +9,9 @@ async function mockMarkets(context){
     return route.fulfill({json:{data:url.pathname.endsWith("/pairs")?["BTC","ETH","SOL"].map(asset=>({exchange,marketType:"spot",symbol:exchange==="coinbase"?`${asset}-USD`:`${asset}USDT`,baseAsset:asset,quoteAsset:quote})):url.pathname.endsWith("/orderbook")?{exchange,symbol,bids:[{price:100,quantity:2}],asks:[{price:101,quantity:3}],receivedAt:Date.now(),exchangeTime:null}:[]}});
   });
 }
-async function logout(page){await page.locator(".account-button").click();await page.getByRole("menuitem",{name:"Выйти",exact:true}).click();await page.getByRole("button",{name:"Войти в Sinex broker",exact:true}).waitFor();}
+async function logout(page){await page.locator(".account-button").click();await page.getByRole("menuitem",{name:"Выйти",exact:true}).click();await page.getByRole("button",{name:"Войти в Sinex",exact:true}).waitFor();}
 async function login(page,email){
-  await page.getByRole("button",{name:"Войти в Sinex broker",exact:true}).click();const form=page.getByRole("dialog");await form.getByLabel("Email",{exact:true}).fill(email);await form.getByLabel("Пароль",{exact:true}).fill(password);await form.getByRole("button",{name:"Войти",exact:true}).click();await page.getByRole("button",{name:`Аккаунт ${email}`,exact:true}).waitFor();
+  await page.getByRole("button",{name:"Войти в Sinex",exact:true}).click();const form=page.getByRole("dialog");await form.getByLabel("Email",{exact:true}).fill(email);await form.getByLabel("Пароль",{exact:true}).fill(password);await form.getByRole("button",{name:"Войти",exact:true}).click();await page.getByRole("button",{name:`Аккаунт ${email}`,exact:true}).waitFor();
 }
 try{
   const a=await browser.newContext({viewport:{width:1440,height:1000}}),clean=await browser.newContext({viewport:{width:1440,height:1000}});await mockMarkets(a);await mockMarkets(clean);

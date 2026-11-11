@@ -19,9 +19,9 @@ try{
     }
     return route.fulfill({json:{data:url.pathname.endsWith("/pairs")?[{exchange,marketType:"spot",symbol,baseAsset:"BTC",quoteAsset:coinbase?"USD":"USDT"}]:[]}});
   });
-  await page.goto(baseURL);const trigger=page.getByRole("button",{name:"Показать стакан",exact:true});await trigger.waitFor();
+  await page.goto(baseURL);const trigger=page.getByRole("button",{name:"Показать стакан",exact:true}),dialog=page.getByRole("dialog",{name:/^Стакан /});await dialog.waitFor();await dialog.getByRole("button",{name:"Закрыть стакан"}).click();await trigger.waitFor();await page.waitForTimeout(800);requests=0;await page.waitForTimeout(800);
   assert.equal(requests,0,"Closed dialog never requests market depth");
-  await trigger.click();const dialog=page.getByRole("dialog",{name:/^Стакан /});await dialog.waitFor();
+  await trigger.click();await dialog.waitFor();
   await dialog.getByRole("status",{name:"WebSocket",exact:true}).waitFor();
   await dialog.getByRole("cell",{name:"100,12345",exact:true}).waitFor();
   if(await dialog.getByRole("button",{name:"Открепить стакан",exact:true}).count())await dialog.getByRole("button",{name:"Открепить стакан",exact:true}).click();

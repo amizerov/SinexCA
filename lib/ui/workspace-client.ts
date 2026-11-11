@@ -1,20 +1,21 @@
 "use client";
-import {DEFAULT_WORKSPACE,normalizeWorkspace,workspaceSettingsSchema,workspacePatchSchema,type WorkspaceSettings,type WorkspacePatch} from "./workspace-settings";
+import {DEFAULT_GUEST_WORKSPACE,DEFAULT_WORKSPACE,normalizeWorkspace,workspaceSettingsSchema,workspacePatchSchema,type WorkspaceSettings,type WorkspacePatch} from "./workspace-settings";
 export interface WorkspaceIdentity {ownerId:string;userId:string|null}
 export interface WorkspaceSnapshot {settings:WorkspaceSettings;ready:boolean;error:string}
-export const EMPTY_WORKSPACE_SNAPSHOT:WorkspaceSnapshot={settings:DEFAULT_WORKSPACE,ready:false,error:""};
+export const EMPTY_WORKSPACE_SNAPSHOT:WorkspaceSnapshot={settings:DEFAULT_GUEST_WORKSPACE,ready:false,error:""};
 interface Bucket {identity:WorkspaceIdentity;key:string;snapshot:WorkspaceSnapshot;pending:WorkspacePatch;active:boolean;cached:boolean;timer?:ReturnType<typeof setTimeout>;loading?:Promise<void>;saving?:Promise<void>}
 const buckets=new Map<string,Bucket>(),listeners=new Set<()=>void>();let active:Bucket|undefined;
 function emit(){for(const listener of listeners)listener();}
 function legacy(){
-  try{const market=JSON.parse(localStorage.getItem("sinex:market-workspace:v1")||"{}"),geometry=JSON.parse(localStorage.getItem("sinex:orderbook-window:v1")||"null");const parsed=workspaceSettingsSchema.safeParse({...DEFAULT_WORKSPACE,...market,orderBookWindow:geometry});return parsed.success?normalizeWorkspace(parsed.data):DEFAULT_WORKSPACE;}catch{return DEFAULT_WORKSPACE;}
+  try{const market=JSON.parse(localStorage.getItem("sinex:market-workspace:v1")||"{}"),geometry=JSON.parse(localStorage.getItem("sinex:orderbook-window:v1")||"null");const parsed=workspaceSettingsSchema.safeParse({...DEFAULT_GUEST_WORKSPACE,...market,orderBookWindow:geometry});return parsed.success?normalizeWorkspace(parsed.data):DEFAULT_GUEST_WORKSPACE;}catch{return DEFAULT_GUEST_WORKSPACE;}
 }
 function bucket(identity:WorkspaceIdentity){
   const key=identity.userId?`sinex:workspace:user:${identity.userId}`:"sinex:workspace:guest";
   let value=buckets.get(key);if(value){value.identity=identity;return value;}
-  let settings=identity.userId?DEFAULT_WORKSPACE:legacy(),pending:WorkspacePatch={},cached=false;
+  let settings=identity.userId?DEFAULT_WORKSPACE:legacy(),pending:WorkspacePatch={},cached=false,migratedGuestPanels=false;
   try{const raw=JSON.parse(localStorage.getItem(key)||"null"),parsed=workspaceSettingsSchema.safeParse(raw?.settings);if(parsed.success){settings=normalizeWorkspace(parsed.data);cached=true;const patch=workspacePatchSchema.safeParse(raw.pending);if(patch.success)pending=patch.data;}}catch{}
-  value={identity,key,snapshot:{settings,ready:!identity.userId,error:""},pending,active:false,cached};buckets.set(key,value);return value;
+  if(!identity.userId){try{const migration="sinex:guest-panels:v1";if(!localStorage.getItem(migration)){settings=normalizeWorkspace({...settings,orderBookOpen:true,marketsOpen:true,tradesOpen:true,tradesDocked:true,tradesTab:"all"});localStorage.setItem(migration,"1");migratedGuestPanels=true;}}catch{}}
+  value={identity,key,snapshot:{settings,ready:!identity.userId,error:""},pending,active:false,cached};buckets.set(key,value);if(migratedGuestPanels)local(value);return value;
 }
 function local(value:Bucket){try{localStorage.setItem(value.key,JSON.stringify({settings:value.snapshot.settings,pending:value.pending}));}catch{/* The live state and server save still work when browser storage is disabled. */}}
 function publish(value:Bucket,settings:WorkspaceSettings,ready=value.snapshot.ready,error=""){value.snapshot={settings,ready,error};emit();}
@@ -74,7 +75,7 @@ export function activateWorkspace(identity:WorkspaceIdentity){
   const storage=(event:StorageEvent)=>{
     if(event.key!==value.key&&event.key!==null)return;
     if(identity.userId){refresh();return;}
-    try{const raw=JSON.parse(localStorage.getItem(value.key)||"null"),parsed=workspaceSettingsSchema.safeParse(raw?.settings);publish(value,parsed.success?normalizeWorkspace(parsed.data):DEFAULT_WORKSPACE,true);}catch{}
+    try{const raw=JSON.parse(localStorage.getItem(value.key)||"null"),parsed=workspaceSettingsSchema.safeParse(raw?.settings);publish(value,parsed.success?normalizeWorkspace(parsed.data):DEFAULT_GUEST_WORKSPACE,true);}catch{}
   };
   window.addEventListener("focus",refresh);window.addEventListener("storage",storage);window.addEventListener("online",refresh);
   return()=>{value.active=false;clearTimeout(value.timer);if(active===value)active=undefined;window.removeEventListener("focus",refresh);window.removeEventListener("storage",storage);window.removeEventListener("online",refresh);};

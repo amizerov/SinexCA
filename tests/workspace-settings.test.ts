@@ -5,7 +5,16 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {AccountStore} from "../lib/server/account-store";
 import {WorkspaceStore} from "../lib/server/workspace-store";
-import {DEFAULT_WORKSPACE} from "../lib/ui/workspace-settings";
+import {DEFAULT_GUEST_WORKSPACE,DEFAULT_WORKSPACE} from "../lib/ui/workspace-settings";
+test("guest workspace opens order book, markets and public trades by default",()=>{
+  assert.equal(DEFAULT_GUEST_WORKSPACE.orderBookOpen,true);
+  assert.equal(DEFAULT_GUEST_WORKSPACE.marketsOpen,true);
+  assert.equal(DEFAULT_GUEST_WORKSPACE.tradesOpen,true);
+  assert.equal(DEFAULT_GUEST_WORKSPACE.tradesDocked,true);
+  assert.equal(DEFAULT_GUEST_WORKSPACE.tradesTab,"all");
+  assert.equal(DEFAULT_WORKSPACE.orderBookOpen,false);
+  assert.equal(DEFAULT_WORKSPACE.tradesOpen,false);
+});
 test("account workspace persists pair, interval, open state and geometry; partial writes preserve unrelated fields and users",()=>{
   const directory=mkdtempSync(join(tmpdir(),"sinex-workspace-")),path=join(directory,"workspace.sqlite");let accounts=new AccountStore(path,false);
   try{

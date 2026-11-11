@@ -15,8 +15,7 @@ try{
     const data=url.pathname.endsWith("/pairs")?[{exchange,marketType:"spot",symbol,baseAsset:"BTC",quoteAsset:"USDT"}]:url.pathname.endsWith("/candles")?Array.from({length:100},(_,i)=>({time:1794000000+i*3600,open:100,close:100.01,high:101,low:99,volume:2})):url.pathname.endsWith("/orderbook")?{exchange,symbol,bids:[{price:100,quantity:2}],asks:[{price:100.01,quantity:3}],receivedAt:Date.now(),exchangeTime:null}:[{exchange,symbol,lastPrice:100.01,high24h:101,low24h:99,priceChangePercent24h:1,quoteVolume24h:1000,receivedAt:Date.now()}];
     return route.fulfill({json:{data}});
   });
-  await page.goto(baseURL);await page.locator('[aria-label="Показать стакан"]:enabled').waitFor();await page.getByRole("button",{name:"Показать стакан",exact:true}).click();
-  const book=page.getByRole("dialog",{name:/^Стакан /});await book.getByRole("status",{name:"WebSocket",exact:true}).waitFor();
+  await page.goto(baseURL);const book=page.getByRole("dialog",{name:/^Стакан /});await book.getByRole("status",{name:"WebSocket",exact:true}).waitFor();
   assert.ok((await book.getAttribute("class")).includes("orderbook-docked"));
   const bookBox=await book.boundingBox(),chartBox=await page.locator(".chart-canvas").boundingBox();assert.ok(chartBox.x>bookBox.x+bookBox.width);assert.ok(chartBox.width>600);
   assert.match(await book.getByRole("columnheader").first().textContent(),/^Цена/);

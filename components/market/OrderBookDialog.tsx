@@ -11,9 +11,11 @@ import {useOrderBook} from "@/hooks/use-order-book";
 import {useFloatingWindow} from "@/hooks/use-floating-window";
 import {useOrderBookDock} from "@/hooks/use-order-book-dock";
 import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
+import {useClientReady} from "@/hooks/use-client-ready";
 
 export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:TradingPair;lastPrice?:number;close:()=>void;pending?:boolean}){
   const root=useRef<HTMLElement>(null),menu=useRef<HTMLDivElement>(null),menuButton=useRef<HTMLButtonElement>(null);
+  const clientReady=useClientReady();
   const titleId=useId(),contextId=useId(),menuId=useId();
   const {book,error,mode,stale,refresh}=useOrderBook(pair,!pending),floating=useFloatingWindow(),preferences=useWorkspacePreferences();
   const settings=preferences.settings.orderBookSettings;
@@ -92,7 +94,7 @@ export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:Tradi
       onPointerDown={dock.start} onPointerMove={dock.move} onPointerUp={dock.end} onPointerCancel={dock.end} onLostPointerCapture={dock.end} onKeyDown={dock.key}/>
       :(["n","s","e","w","ne","nw","se","sw"] as const).map(edge=><div key={edge} className={`book-resize book-resize-${edge}`} onPointerDown={event=>floating.start(event,edge)} {...(edge==="se"?{role:"button",tabIndex:0,"aria-label":"Изменить размер стакана",title:"Потяните за край; стрелки — изменение размера",onKeyDown:(event:KeyboardEvent<HTMLElement>)=>floating.key(event,true)}:{"aria-hidden":true})}/>)}
   </section>;
-  const menuContent=menuPosition&&createPortal(<div ref={menu} id={menuId} className="book-settings-panel" role="region" aria-label="Настройки стакана" style={menuPosition} onKeyDown={escape}>
+  const menuContent=clientReady&&menuPosition&&createPortal(<div ref={menu} id={menuId} className="book-settings-panel" role="region" aria-label="Настройки стакана" style={menuPosition} onKeyDown={escape}>
     <div className="book-settings-title">Стакан <button type="button" aria-label="Закрыть настройки стакана" onClick={()=>{setMenuPosition(null);menuButton.current?.focus();}}><X size={14}/></button></div>
     <label>Расположение<select aria-label="Расположение стакана" value={settings.mode} onChange={event=>save({mode:event.target.value as OrderBookSettings["mode"]})}><option value="docked" disabled={!dock.wide}>Слева от графика</option><option value="floating">Плавающее окно</option></select></label>
     {!dock.wide&&<p>На узком экране стакан открывается поверх графика.</p>}
@@ -101,5 +103,5 @@ export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:Tradi
     <label>Строк на сторону<select aria-label="Строк на сторону" value={settings.levels} onChange={event=>save({levels:Number(event.target.value) as OrderBookSettings["levels"]})}><option value={5}>До 5</option><option value={10} disabled={!!book&&Math.max(bids.length,asks.length)<10}>До 10</option><option value={20}>Все полученные</option></select></label>
     <label>Шаг группировки, {pair.quoteAsset}<input aria-label="Шаг группировки цены" type="number" min="0" max="1000000000000" step="any" defaultValue={priceStep||""} placeholder="Без группировки" onChange={event=>{const value=Number(event.target.value);if(Number.isFinite(value)&&value>=0&&value<=1e12)save({priceSteps:{...settings.priceSteps,[marketKey]:value}});}} onBlur={event=>{event.currentTarget.value=priceStep?String(priceStep):"";}}/></label>
   </div>,document.body);
-  return <>{docked?content:createPortal(content,document.body)}{menuContent}</>;
+  return <>{docked?content:clientReady?createPortal(content,document.body):null}{menuContent}</>;
 }

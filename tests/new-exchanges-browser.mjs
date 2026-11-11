@@ -9,8 +9,7 @@ try{
   for(const [id,name]of [["whitebit","WhiteBIT"],["cryptocom","Crypto.com"]]){
     if(await page.locator(".exchange-select").isVisible())await page.locator(".exchange-select").selectOption(id);else await page.getByRole("button",{name,exact:true}).click();
     await page.locator(".chart-caption").filter({hasText:"500 свечей"}).waitFor({timeout:45000});
-    await page.getByRole("button",{name:"Показать стакан",exact:true}).click();
-    const dialog=page.getByRole("dialog",{name:/^Стакан /});await dialog.getByRole("status",{name:"WebSocket",exact:true}).waitFor({timeout:30000});
+    const dialog=page.getByRole("dialog",{name:/^Стакан /});if(!await dialog.count())await page.getByRole("button",{name:"Показать стакан",exact:true}).click();await dialog.getByRole("status",{name:"WebSocket",exact:true}).waitFor({timeout:30000});
     assert.ok(await dialog.locator(".book-bids .book-row").count()>0);
     await dialog.getByRole("button",{name:"Закрыть стакан"}).click();
     console.log("PASS",name,"500 candles, real WebSocket book");

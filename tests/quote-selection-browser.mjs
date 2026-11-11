@@ -25,7 +25,7 @@ try{
   await selector.selectOption("all");await page.locator(".pair-row").nth(2).waitFor();
   await page.locator(".pair-row").filter({hasText:"SOL/USDT"}).click();await page.locator(".asset-name h1").filter({hasText:"SOL/USDT"}).waitFor();
   assert.equal(await selector.inputValue(),"all");
-  await page.getByRole("button",{name:"Показать стакан",exact:true}).click();const book=page.getByRole("dialog",{name:/^Стакан /});await book.getByRole("cell",{name:"89",exact:true}).waitFor();
+  const book=page.getByRole("dialog",{name:/^Стакан /});await book.getByRole("cell",{name:"89",exact:true}).waitFor();
   assert.ok((await book.locator(".orderbook-window-header").getAttribute("title")).includes("SOL/USDT"));
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("sinex:workspace:guest")).settings);assert.equal(saved.quote,"all");assert.equal(saved.selectedQuote,"USDT");
   await page.reload();await page.locator(".asset-name h1").filter({hasText:"SOL/USDT"}).waitFor();assert.equal(await selector.inputValue(),"all");

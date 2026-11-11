@@ -18,7 +18,7 @@ try{
     const data=url.pathname.endsWith("/pairs")?pairs:url.pathname.endsWith("/candles")?Array.from({length:100},(_,i)=>({time:Math.floor(Date.now()/3600000)*3600-(99-i)*3600,open:100,high:102,low:99,close:101,volume:2})):url.pathname.endsWith("/orderbook")?{exchange,symbol:url.searchParams.get("symbol"),bids:[{price:100,quantity:2}],asks:[{price:101,quantity:3}],receivedAt:Date.now(),exchangeTime:null}:pairs.filter(p=>!quote||quote==="all"||p.quoteAsset===quote).map(p=>({exchange,symbol:p.symbol,lastPrice:101,high24h:102,low24h:99,priceChangePercent24h:1,quoteVolume24h:1000,receivedAt:Date.now()}));
     return route.fulfill({json:{data}});
   });
-  await page.goto(baseURL);await page.locator('[aria-label="Показать стакан"]:enabled').waitFor();
+  await page.goto(baseURL);await page.locator(".book-terminal").waitFor();
   const panel=page.locator(".markets-panel");await page.locator('.pair-list[aria-busy="false"]').waitFor();
   const initial=await panel.boundingBox(),chart=await page.locator(".chart-canvas").boundingBox();assert.ok(initial.x>=chart.x+chart.width);assert.ok((await panel.locator(".pair-row").first().boundingBox()).height<33);
   const originalTitle=await page.locator(".asset-name h1").textContent();await panel.getByRole("button",{name:"Добавить SOL/USDT в избранное",exact:true}).click();assert.equal(await page.locator(".asset-name h1").textContent(),originalTitle,"Favorite does not select the pair");
@@ -36,7 +36,7 @@ try{
   await panel.getByRole("combobox",{name:"Валюта котировки",exact:true}).selectOption("USDT");await page.locator('.pair-list[aria-busy="false"]').waitFor();assert.equal(await panel.getByRole("button",{name:"Убрать SOL/USDT из избранного",exact:true}).count(),1);
   await page.goto(`${baseURL}/account`);await page.getByRole("link",{name:"К графику",exact:true}).click();await panel.waitFor();await page.locator('.pair-list[aria-busy="false"]').waitFor();assert.equal((await panel.boundingBox()).width,dockWidth);await panel.getByRole("button",{name:"Убрать SOL/USDT из избранного",exact:true}).waitFor();assert.equal(await panel.getByRole("button",{name:"Убрать SOL/USDT из избранного",exact:true}).count(),1);
   await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/markets-panel-desktop.png"});
-  await page.getByRole("button",{name:"Показать стакан",exact:true}).click();await page.getByRole("dialog",{name:/^Стакан /}).waitFor();assert.equal(await page.getByRole("button",{name:"Показать стакан",exact:true}).count(),0);
+  await page.getByRole("dialog",{name:/^Стакан /}).waitFor();assert.equal(await page.getByRole("button",{name:"Показать стакан",exact:true}).count(),0);
   for(const width of [1920,1440,1280,1100,1024,768,600,320]){
     await page.setViewportSize({width,height:900});await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false,`${width}: page overflows`);

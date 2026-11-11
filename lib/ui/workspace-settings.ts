@@ -12,4 +12,5 @@ export const workspacePatchSchema=workspaceSettingsSchema.partial().extend({quot
 export type WorkspaceSettings=z.infer<typeof workspaceSettingsSchema>;
 export type WorkspacePatch=Partial<WorkspaceSettings>;
 export const DEFAULT_WORKSPACE:WorkspaceSettings={exchange:"binance",selected:"BTC",quote:"auto",selectedQuote:"",timeframe:"1h",orderBookOpen:false,orderBookWindow:null,orderBookSettings:DEFAULT_ORDER_BOOK,marketPanel:DEFAULT_MARKET_PANEL,marketWindow:null,marketsOpen:true,tradesOpen:false,tradesWindow:null,tradesTab:"all",tradesDocked:false,tradesSide:"auto",tradesWidth:300,sidePanelOrder:"markets-first",sidePanelSplit:.6,sidePanelLayout:"stacked",orderDialogPosition:null,profileDialogPosition:null};
+export const DEFAULT_GUEST_WORKSPACE:WorkspaceSettings={...DEFAULT_WORKSPACE,orderBookOpen:true,marketsOpen:true,tradesOpen:true,tradesDocked:true,tradesTab:"all"};
 export function normalizeWorkspace(settings:WorkspaceSettings){return {...settings,timeframe:nearestTimeframe(settings.exchange,settings.timeframe)};}
