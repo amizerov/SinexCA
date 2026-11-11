@@ -123,6 +123,15 @@ API: `GET /api/drawings?exchange=binance&marketType=spot&symbol=BTCUSDT` воз�
 
 При первом запуске новая схема сохраняет старые таблицы и переносит существующие уровни только в зарезервированный аккаунт `andrey@mizerov.net`. Перед миграцией существующей базы создаётся согласованная копия `data/sinex.pre-accounts-*.sqlite`, включая данные WAL. Для активации по паролю зарегистрируйтесь с этим email и введите код из локального `data/owner-setup-code.txt`. Это предотвращает захват старой разметки по одному лишь знанию email. Также можно активировать аккаунт через Google с подтверждённым тем же email. Код не публикуйте; файл исключён из Git.
 
+Настройка Яндекс ID:
+
+1. Создайте [приложение для авторизации пользователей](https://oauth.yandex.ru/client/new/id/) с названием Sinex broker. Выберите веб-сервис и доступы `login:email`, `login:info`, `login:avatar` (почта, имя, портрет).
+2. Добавьте Redirect URI `http://localhost:3002/api/auth/yandex/callback`. Для рабочего сайта добавьте `https://sinex.argoai.ru/api/auth/yandex/callback`.
+3. Сохраните `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` только в `.env.local` или переменных окружения сервера. `SINEX_APP_URL` должен совпадать с адресом сайта: локально `http://localhost:3002`, на сервере `https://sinex.argoai.ru`. После изменения переменных перезапустите свой dev-процесс.
+4. Кнопка «Продолжить с Яндекс» станет доступна после настройки. Проверка полного входа требует настоящего OAuth-приложения и согласия пользователя в Яндексе.
+
+Используются authorization code flow с PKCE S256, одноразовый state, отдельная HttpOnly-cookie и привязка к текущей сессии. Профиль запрашивается сервером через API Яндекс ID; проверяется `client_id`, требуется email. Access/refresh tokens не сохраняются. Имя и аватар сохраняются в SQLite; ручные изменения профиля сохраняют приоритет. После успешного OAuth-входа Яндекс автоматически привязывается по email к обычному аккаунту с паролем, без создания дубля и без повторного ввода пароля. Привязка к другому провайдеру по одному email не выполняется. Зарезервированный аккаунт владельца также не активируется одним email Яндекса. Документация: [OAuth-код и PKCE](https://yandex.ru/dev/id/doc/ru/codes/code-url), [профиль и аватар](https://yandex.ru/dev/id/doc/ru/user-information). Проверки: `tests/yandex-auth.test.ts`.
+
 Настройка Google:
 
 1. Создайте Web OAuth client в [Google Cloud](https://console.cloud.google.com/auth/clients).

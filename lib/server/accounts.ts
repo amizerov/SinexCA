@@ -6,7 +6,7 @@ import { AccountStore, SESSION_MAX_AGE, AccountError } from "./account-store";
 import { isSameOrigin } from "@/lib/drawings/same-origin";
 import { z } from "zod";
 export const SESSION_COOKIE = "sinex_session";
-const STORE_VERSION=7;
+const STORE_VERSION=9;
 const singleton=globalThis as typeof globalThis & {sinexAccountStore?:AccountStore;sinexAccountStoreVersion?:number};
 export function getAccountStore() {
   // Development HMR otherwise retains an instance whose methods predate profile support.

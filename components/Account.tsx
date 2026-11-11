@@ -9,7 +9,22 @@ import {useRouter} from "next/navigation";
 import type { AccountSession,AccountUser } from "@/lib/auth/types";
 import {ProfileEditor} from "./ProfileEditor";
 import {flushWorkspacePreferences} from "@/lib/ui/workspace-client";
-type Session=AccountSession & {googleAvailable:boolean};
+const yandexErrors:Record<string,string>={
+  YANDEX_UNAVAILABLE:"Вход через Яндекс пока не настроен.",
+  YANDEX_CLIENT_INVALID:"Яндекс отклонил Client ID или Client Secret. Проверьте настройки приложения на сервере.",
+  YANDEX_CODE_EXPIRED:"Код входа Яндекса истёк или уже использован. Нажмите «Продолжить с Яндекс» ещё раз.",
+  YANDEX_STATE_EXPIRED:"Сеанс входа Яндекса истёк. Начните вход заново в этой вкладке.",
+  YANDEX_EMAIL_REQUIRED:"Яндекс не передал email. В приложении нужен доступ «Адрес электронной почты» (login:email).",
+  YANDEX_CLIENT_MISMATCH:"Профиль Яндекса получен для другого приложения. Проверьте Client ID.",
+  YANDEX_APP_REJECTED:"Яндекс не разрешил вход: приложение ожидает модерации, отклонено или заблокировано.",
+  YANDEX_ACCESS_DENIED:"Доступ к аккаунту Яндекса не был разрешён.",
+  YANDEX_PROVIDER_FAILED:"Яндекс отклонил запрос входа. Проверьте доступы и Redirect URI приложения.",
+  YANDEX_TOKEN_FAILED:"Яндекс не выдал токен входа. Начните вход заново; если ошибка повторяется, проверьте настройки приложения.",
+  YANDEX_PROFILE_FAILED:"Не удалось получить профиль Яндекса. Попробуйте войти ещё раз.",
+  YANDEX_PROFILE_INVALID:"Яндекс вернул неполный профиль. Проверьте разрешения приложения.",
+  YANDEX_TIMEOUT:"Сервер не дождался ответа Яндекса. Попробуйте войти ещё раз.",
+};
+type Session=AccountSession & {googleAvailable:boolean;yandexAvailable?:boolean};
 const Context=createContext<{session:Session|null;refresh:()=>Promise<void>;changed:()=>Promise<void>}>({session:null,refresh:async()=>{},changed:async()=>{}});
 export const useAccount=()=>useContext(Context);
 // Share the first request in React Strict Mode so two guest cookies cannot race.
@@ -58,8 +73,9 @@ export function AccountButton() {
   const {session,changed}=useAccount();const dialog=useRef<HTMLDialogElement>(null);
   const [open,setOpen]=useState(false),[tab,setTab]=useState<"login"|"register">("login"),[error,setError]=useState(""),[busy,setBusy]=useState(false),[ownerSetup,setOwnerSetup]=useState(false);
   const [actionError,setActionError]=useState("");
+  const [linkYandex,setLinkYandex]=useState(false);
   const router=useRouter();
-  useEffect(()=>{const query=new URLSearchParams(location.search),code=query.get("auth_error");if(code){queueMicrotask(()=>{setError(code==="LINK_REQUIRED"?"Для этого email уже есть аккаунт. Войдите с email и паролем.":code==="GOOGLE_UNAVAILABLE"?"Вход через Google пока недоступен.":"Не удалось войти через Google. Попробуйте ещё раз.");setOpen(true);});query.delete("auth_error");history.replaceState(null,"",`${location.pathname}${query.size?`?${query}`:""}${location.hash}`);}},[]);
+  useEffect(()=>{const query=new URLSearchParams(location.search),code=query.get("auth_error"),provider=query.get("auth_provider");if(code){queueMicrotask(()=>{if(code==="LINK_REQUIRED"&&provider==="yandex"){setLinkYandex(true);setTab("login");}setError(code==="LINK_REQUIRED"&&provider==="yandex"?"Войдите с паролем Sinex, чтобы подключить Яндекс к существующему аккаунту.":yandexErrors[code]||(code==="LINK_REQUIRED"?"Для этого email уже есть аккаунт. Войдите привычным способом.":code.startsWith("YANDEX_")?code==="YANDEX_UNAVAILABLE"?"Вход через Яндекс пока не настроен.":"Не удалось войти через Яндекс. Попробуйте ещё раз.":code==="GOOGLE_UNAVAILABLE"?"Вход через Google пока недоступен.":"Не удалось войти через Google. Попробуйте ещё раз."));setOpen(true);});query.delete("auth_error");query.delete("auth_provider");history.replaceState(null,"",`${location.pathname}${query.size?`?${query}`:""}${location.hash}`);}},[]);
   const hasUser=!!session?.user;
   useEffect(()=>{if(open&&!hasUser) dialog.current?.showModal();else dialog.current?.close();},[open,hasUser]);
   async function waitForDrawings() {
@@ -73,7 +89,7 @@ export function AccountButton() {
     }
     throw new Error("Дождитесь сохранения разметки и повторите вход.");
   }
-  async function google(){setBusy(true);setError("");try{await waitForDrawings();window.location.href=new URL("/api/auth/google",window.location.origin).href;}catch(cause){setError(cause instanceof Error?cause.message:"Не удалось продолжить.");setBusy(false);}}
+  async function oauth(provider:"google"|"yandex"){setBusy(true);setError("");try{await waitForDrawings();window.location.href=new URL(`/api/auth/${provider}`,window.location.origin).href;}catch(cause){setError(cause instanceof Error?cause.message:"Не удалось продолжить.");setBusy(false);}}
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();setError("");setBusy(true);
     try {
@@ -82,6 +98,7 @@ export function AccountButton() {
       if(tab==="register"&&fields.password!==fields.confirmPassword) throw new Error("Пароли не совпадают.");
       const response=await fetch(`/api/auth/${tab}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}),result=await response.json();
       if(!response.ok){if(result.error?.code==="OWNER_SETUP_REQUIRED")setOwnerSetup(true);throw new Error(result.error?.message||"Не удалось войти.");}
+      if(linkYandex&&tab==="login"){window.location.href=new URL("/api/auth/yandex",window.location.origin).href;return;}
       await changed();setOpen(false);setOwnerSetup(false);
     }catch(cause){setError(cause instanceof Error?cause.message:"Нет соединения с сервером.");}finally{setBusy(false);}
   }
@@ -95,7 +112,8 @@ export function AccountButton() {
       <button className="account-close" onClick={()=>setOpen(false)} aria-label="Закрыть"><X size={19}/></button>
       <h2 id="account-title">{session?.user?"Профиль":"Добро пожаловать в Sinex broker"}</h2>
       {session?.user?null:<>
-        <button className="google-button" disabled={!session?.googleAvailable||busy} onClick={()=>void google()}><GoogleMark/>Продолжить с Google</button>
+        <button className="google-button" disabled={!session?.googleAvailable||busy} onClick={()=>void oauth("google")}><GoogleMark/>Продолжить с Google</button>
+        <button className="google-button yandex-button" disabled={!session?.yandexAvailable||busy} onClick={()=>void oauth("yandex")} title={session?.yandexAvailable?"Войти через Яндекс ID":"Вход через Яндекс пока не настроен"}><span className="yandex-mark" aria-hidden="true">Я</span>Продолжить с Яндекс</button>
         {session&&!session.googleAvailable&&<p className="account-hint google-unavailable">Вход через Google пока недоступен</p>}
         <div className="account-tabs"><button aria-pressed={tab==="login"} onClick={()=>{setTab("login");setError("");}}>Вход</button><button aria-pressed={tab==="register"} onClick={()=>{setTab("register");setError("");}}>Регистрация</button></div>
         <form onSubmit={submit} key={tab}>

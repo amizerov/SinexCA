@@ -311,3 +311,6 @@ h1, h2, p { margin: 0; }
 .book-depth-scroll>.book-side>.book-row {flex-shrink:0;}
 .book-depth-scroll>.book-spread {position:relative;top:auto;}
 .book-depth-scroll>.book-empty:only-child {grid-row:1/-1;align-self:center;}
+
+.yandex-button {margin-top:8px;}
+.yandex-mark {display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fc3f1d;color:#fff;font:500 16px Arial,sans-serif;flex-shrink:0;}

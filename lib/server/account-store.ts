@@ -35,6 +35,8 @@ export class AccountStore {
       const columns=new Set(this.db.prepare("PRAGMA table_info(account_users)").all().map(column=>column.name));
       if(!columns.has("display_name"))this.db.exec("ALTER TABLE account_users ADD COLUMN display_name TEXT;");
       if(!columns.has("avatar_url"))this.db.exec("ALTER TABLE account_users ADD COLUMN avatar_url TEXT;");
+      if(!columns.has("yandex_sub"))this.db.exec("ALTER TABLE account_users ADD COLUMN yandex_sub TEXT;");
+      this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS account_users_yandex_sub ON account_users(yandex_sub);");
       if(!columns.has("profile_name_custom"))this.db.exec("ALTER TABLE account_users ADD COLUMN profile_name_custom INTEGER NOT NULL DEFAULT 0;");
       if(!columns.has("profile_avatar_custom"))this.db.exec("ALTER TABLE account_users ADD COLUMN profile_avatar_custom INTEGER NOT NULL DEFAULT 0;");
       this.db.exec("COMMIT");
@@ -157,7 +159,7 @@ export class AccountStore {
     try {
       let user = this.userByEmail(email);
       if (user) {
-        if (user.password_hash || user.google_sub) throw new AccountError("Для этого email уже есть аккаунт. Войдите в него.", 409);
+        if (user.password_hash || user.google_sub || user.yandex_sub) throw new AccountError("Для этого email уже есть аккаунт. Войдите в него.", 409);
         if (!ownerCode || !user.owner_code_hash || tokenHash(ownerCode.trim()) !== user.owner_code_hash) throw new AccountError("Для активации владельца введите одноразовый код из data/owner-setup-code.txt.", 409, "OWNER_SETUP_REQUIRED");
         this.db.prepare("UPDATE account_users SET password_hash=?,owner_code_hash=NULL WHERE id=?").run(passwordHash,user.id!);
       } else {
@@ -191,7 +193,7 @@ export class AccountStore {
       if (!user) {
         user = this.userByEmail(email);
         if (user?.google_sub && user.google_sub !== sub) throw new AccountError("К этому email подключён другой Google-аккаунт.", 409);
-        if (user && (user.password_hash || user.google_sub) && current.user?.id !== user.id) throw new AccountError("Для этого email уже есть аккаунт. Войдите с email и паролем.", 409, "LINK_REQUIRED");
+        if (user && (user.password_hash || user.google_sub || user.yandex_sub) && current.user?.id !== user.id) throw new AccountError("Для этого email уже есть аккаунт. Войдите привычным способом.", 409, "LINK_REQUIRED");
         if (user) this.db.prepare("UPDATE account_users SET google_sub=?,owner_code_hash=NULL WHERE id=?").run(sub,user.id!);
         else {
           const id = randomUUID();
@@ -201,6 +203,31 @@ export class AccountStore {
         }
       }
       if (current.user && current.user.id !== user.id) throw new AccountError("Сначала выйдите из текущего аккаунта.", 409);
+      this.db.prepare("UPDATE account_users SET display_name=CASE WHEN profile_name_custom=0 THEN COALESCE(?,display_name) ELSE display_name END,avatar_url=CASE WHEN profile_avatar_custom=0 THEN COALESCE(?,avatar_url) ELSE avatar_url END WHERE id=?").run(profile.displayName,profile.avatarUrl,user.id!);
+      const result=this.authenticate(String(user.id),current);this.db.exec("COMMIT");return result;
+    }catch(error){this.db.exec("ROLLBACK");throw error;}
+  }
+  yandex(sub:string,email:string,current:AccountSession,profile:{displayName:string|null;avatarUrl:string|null}){
+    if(current.user&&current.user.email!==email)throw new AccountError("Выберите Яндекс-аккаунт с email текущего аккаунта Sinex broker.",409);
+    this.db.exec("BEGIN IMMEDIATE");
+    try{
+      let user=this.db.prepare("SELECT * FROM account_users WHERE yandex_sub=?").get(sub);
+      if(user&&current.user&&user.id!==current.user.id)throw new AccountError("Этот Яндекс-аккаунт уже подключён к другому пользователю.",409);
+      if(!user){
+        user=this.userByEmail(email);
+        if(user?.yandex_sub&&user.yandex_sub!==sub)throw new AccountError("К этому email подключён другой Яндекс-аккаунт.",409);
+        // A completed Yandex OAuth login can link an ordinary password account by email.
+        // Reserved owner activation and accounts using another provider stay explicit.
+        const passwordAccount=!!user?.password_hash&&!user.google_sub&&!user.owner_code_hash;
+        if(user&&current.user?.id!==user.id&&!passwordAccount)throw new AccountError("Для этого email уже есть аккаунт. Сначала войдите привычным способом.",409,"LINK_REQUIRED");
+        if(user)this.db.prepare("UPDATE account_users SET yandex_sub=? WHERE id=?").run(sub,user.id!);
+        else{
+          const id=randomUUID();
+          this.db.prepare("INSERT INTO account_users(id,email,yandex_sub,created_at) VALUES(?,?,?,?)").run(id,email,sub,Date.now());
+          this.db.prepare("INSERT INTO workspace_owners VALUES(?,'user',?,?)").run(randomUUID(),id,Date.now());
+          user=this.userByEmail(email)!;
+        }
+      }
       this.db.prepare("UPDATE account_users SET display_name=CASE WHEN profile_name_custom=0 THEN COALESCE(?,display_name) ELSE display_name END,avatar_url=CASE WHEN profile_avatar_custom=0 THEN COALESCE(?,avatar_url) ELSE avatar_url END WHERE id=?").run(profile.displayName,profile.avatarUrl,user.id!);
       const result=this.authenticate(String(user.id),current);this.db.exec("COMMIT");return result;
     }catch(error){this.db.exec("ROLLBACK");throw error;}
