@@ -513,3 +513,4 @@ html[data-theme="light"] .drawing-save-status[data-save-status="conflict"] {back
 html[data-theme="light"] .demo-orders-tabs button {color:#425646;}
 html[data-theme="light"] .demo-orders-tabs button[aria-pressed="true"] {background:#e1eddd;color:#205f27;border-bottom-color:#2f7330;font-weight:650;}
 html[data-theme="light"] .account-tabs button[aria-pressed="true"] {color:#205f27;border-bottom-color:#2f7330;font-weight:650;}
+@media(max-width:600px){.orderbook-window,.trades-window,.orderbook-button,.trades-toggle-button,.drawing-rail,.drawing-surface,.level-editor,.level-hit,.drawing-hint,.trend-hit,.trend-endpoint{display:none!important;}}

@@ -4,6 +4,10 @@ const media="(min-width: 1100px)";
 function subscribe(change:()=>void){const query=window.matchMedia(media);query.addEventListener("change",change);return()=>query.removeEventListener("change",change);}
 const snapshot=()=>window.matchMedia(media).matches,serverSnapshot=()=>false;
 export function useDockViewport(){return useSyncExternalStore(subscribe,snapshot,serverSnapshot);}
+const mobileMedia="(max-width: 600px)";
+function subscribeMobile(change:()=>void){const query=window.matchMedia(mobileMedia);query.addEventListener("change",change);return()=>query.removeEventListener("change",change);}
+const mobileSnapshot=()=>window.matchMedia(mobileMedia).matches;
+export function useMobileViewport(){return useSyncExternalStore(subscribeMobile,mobileSnapshot,serverSnapshot);}
 export function useOrderBookDock(saved:number,save:(width:number)=>void,minimum=230,maximum=560){
   const wide=useDockViewport();
   const [state,setState]=useState({source:saved,width:saved});
