@@ -5,6 +5,7 @@ import { MDXRemote } from "next-mdx-remote/rsc";
 import { mdxComponents } from "@/components/knowledge/MdxComponents";
 import { getAllArticles, getArticle, getSectionArticles } from "@/lib/content/articles";
 import { SECTION_META, absoluteUrl, isContentSection } from "@/lib/content/site";
+import { breadcrumbs, pageMetadata } from "@/lib/content/seo";
 
 type Props = { params: Promise<{ section: string; slug: string }> };
 
@@ -20,14 +21,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!isContentSection(section)) return {};
   const article = getArticle(section, slug);
   if (!article) return {};
+  const title = /\bSinex\b/i.test(article.title) ? article.title : `${article.title} — Sinex`;
+  const meta = pageMetadata(title, article.description, article.href);
   return {
-    title: article.title,
-    description: article.description,
+    ...meta,
     authors: [{ name: article.author }],
-    alternates: { canonical: article.href },
     openGraph: {
+      ...meta.openGraph,
       type: "article",
-      title: article.title,
       description: article.description,
       url: absoluteUrl(article.href),
       publishedTime: article.date,
@@ -56,24 +57,18 @@ export default async function ArticlePage({ params }: Props) {
       datePublished: article.date,
       dateModified: article.updated,
       mainEntityOfPage: absoluteUrl(article.href),
+      url: absoluteUrl(article.href),
+      inLanguage: "ru",
       author: { "@type": "Organization", name: article.author, url: absoluteUrl("/about") },
-      publisher: { "@type": "Organization", name: "Sinex", url: absoluteUrl("/") },
     },
-    {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        { "@type": "ListItem", position: 1, name: SECTION_META[section].title, item: absoluteUrl(`/${section}`) },
-        { "@type": "ListItem", position: 2, name: article.title, item: absoluteUrl(article.href) },
-      ],
-    },
+    breadcrumbs([{ name: SECTION_META[section].title, path: `/${section}` }, { name: article.title, path: article.href }]),
   ];
 
   return <main className="kb-article-layout">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
     <article className="kb-article">
       <nav className="kb-breadcrumbs" aria-label="Хлебные крошки">
-        <Link href={`/${section}`}>{SECTION_META[section].title}</Link><span>/</span><span>{article.title}</span>
+        <Link href="/">Sinex</Link><span>/</span><Link href={`/${section}`}>{SECTION_META[section].title}</Link><span>/</span><span>{article.title}</span>
       </nav>
       <header>
         <p>{article.tags.join(" · ")}</p>

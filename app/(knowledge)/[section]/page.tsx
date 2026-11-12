@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSectionArticles } from "@/lib/content/articles";
 import { CONTENT_SECTIONS, SECTION_META, absoluteUrl, isContentSection } from "@/lib/content/site";
+import { breadcrumbs, pageMetadata } from "@/lib/content/seo";
 
 type Props = { params: Promise<{ section: string }> };
 
@@ -17,12 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { section } = await params;
   if (!isContentSection(section)) return {};
   const meta = SECTION_META[section];
-  return {
-    title: meta.title,
-    description: meta.description,
-    alternates: { canonical: `/${section}` },
-    openGraph: { title: meta.title, description: meta.description, url: absoluteUrl(`/${section}`), type: "website" },
-  };
+  return pageMetadata(`${meta.title} — Sinex`, meta.description, `/${section}`);
 }
 
 export default async function SectionPage({ params }: Props) {
@@ -39,7 +35,8 @@ export default async function SectionPage({ params }: Props) {
     hasPart: articles.map((article) => ({ "@type": "Article", name: article.title, url: absoluteUrl(article.href) })),
   };
   return <main className="kb-main">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([jsonLd, breadcrumbs([{ name: meta.title, path: `/${section}` }])]).replace(/</g, "\\u003c") }} />
+    <nav className="kb-breadcrumbs" aria-label="Хлебные крошки"><Link href="/">Sinex</Link><span>/</span><span>{meta.title}</span></nav>
     <header className="kb-hero">
       <p>{meta.eyebrow}</p>
       <h1>{meta.title}</h1>

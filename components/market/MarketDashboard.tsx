@@ -146,5 +146,9 @@ export function MarketDashboard() {
     </div>
     {coinInfoOpen&&pair&&<CoinInfoDialog key={`${pair.exchange}:${pair.symbol}`} pair={pair} ticker={ticker} lastPrice={lastPrice} usdtUsdRate={usdtUsdRate} close={()=>setCoinInfoOpen(false)}/>}
     {orderDraft&&orderDraft.ownerId===session?.ownerId&&<DemoOrderDialog key={`${session?.ownerId}:${orderDraft.pair.exchange}:${orderDraft.pair.symbol}`} pair={orderDraft.pair} draft={orderDraft} currentPrice={pair?.exchange===orderDraft.pair.exchange&&pair?.symbol===orderDraft.pair.symbol?lastPrice:undefined} orders={orders} close={()=>setOrderDraft(null)}/>}
+    <footer className="terminal-footer">
+      <span>Sinex — криптовалютный терминал</span>
+      <nav aria-label="Основные разделы"><Link href="/help">Справка</Link><Link href="/learn">Обучение</Link><Link href="/developers">Разработчикам</Link><Link href="/blog">Блог</Link><Link href="/about">О проекте</Link></nav>
+    </footer>
   </div></PanelDockProvider>;
 }

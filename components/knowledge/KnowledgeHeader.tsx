@@ -16,6 +16,7 @@ export function KnowledgeHeader({ articles }: { articles: ArticleMeta[] }) {
         <Link href="/learn">Обучение</Link>
         <Link href="/developers">Разработчикам</Link>
         <Link href="/blog">Блог</Link>
+        <Link href="/about">О проекте</Link>
       </nav>
       <KnowledgeSearch articles={articles} />
       <ThemeToggle />
