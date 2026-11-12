@@ -14,6 +14,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, .pair-list:focus-vi
 h1, h2, p { margin: 0; }
 .positive { color: var(--green) !important; }.negative { color: var(--red) !important; }.muted { color: var(--muted); }
 .app-shell { width: 100%; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.terminal-footer { flex-shrink: 0; display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.terminal-footer nav { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.terminal-footer a:hover { color: var(--green); }
+@media (max-width: 700px) { .terminal-footer > span { display: none; } .terminal-footer nav { width: 100%; justify-content: space-between; gap: 6px; } }
 .topbar { flex: 0 0 54px; min-height: 0; padding: 0 20px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--line); background: #101612; }
 .brand { display: inline-flex; align-items: center; gap: 9px; font-size: 20px; letter-spacing: -.7px; font-weight: 700; flex-shrink: 0; }
 .brand-name { display: flex; flex-direction: column; line-height: 1; }
