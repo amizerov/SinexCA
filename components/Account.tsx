@@ -9,6 +9,7 @@ import {useRouter} from "next/navigation";
 import type { AccountSession,AccountUser } from "@/lib/auth/types";
 import {ProfileEditor} from "./ProfileEditor";
 import {flushWorkspacePreferences} from "@/lib/ui/workspace-client";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 const yandexErrors:Record<string,string>={
   YANDEX_UNAVAILABLE:"Вход через Яндекс пока не настроен.",
   YANDEX_CLIENT_INVALID:"Яндекс отклонил Client ID или Client Secret. Проверьте настройки приложения на сервере.",
@@ -75,6 +76,8 @@ export function AccountButton() {
   const [actionError,setActionError]=useState("");
   const [linkYandex,setLinkYandex]=useState(false);
   const router=useRouter();
+  useFloatingNotice("account-form",error);
+  useFloatingNotice("account-action",actionError);
   useEffect(()=>{const query=new URLSearchParams(location.search),code=query.get("auth_error"),provider=query.get("auth_provider");if(code){queueMicrotask(()=>{if(code==="LINK_REQUIRED"&&provider==="yandex"){setLinkYandex(true);setTab("login");}setError(code==="LINK_REQUIRED"&&provider==="yandex"?"Войдите с паролем Sinex, чтобы подключить Яндекс к существующему аккаунту.":yandexErrors[code]||(code==="LINK_REQUIRED"?"Для этого email уже есть аккаунт. Войдите привычным способом.":code.startsWith("YANDEX_")?code==="YANDEX_UNAVAILABLE"?"Вход через Яндекс пока не настроен.":"Не удалось войти через Яндекс. Попробуйте ещё раз.":code==="GOOGLE_UNAVAILABLE"?"Вход через Google пока недоступен.":"Не удалось войти через Google. Попробуйте ещё раз."));setOpen(true);});query.delete("auth_error");query.delete("auth_provider");history.replaceState(null,"",`${location.pathname}${query.size?`?${query}`:""}${location.hash}`);}},[]);
   const hasUser=!!session?.user;
   useEffect(()=>{if(open&&!hasUser) dialog.current?.showModal();else dialog.current?.close();},[open,hasUser]);
@@ -105,9 +108,8 @@ export function AccountButton() {
   async function navigateAccount(){setBusy(true);setError("");setActionError("");setOpen(false);try{await waitForDrawings();router.push("/account");}catch(cause){setActionError(cause instanceof Error?cause.message:"Не удалось открыть аккаунт.");}finally{setBusy(false);}}
   async function logout(){setBusy(true);setActionError("");setOpen(false);try{await waitForDrawings();const response=await fetch("/api/auth/logout",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});if(!response.ok)throw new Error("Не удалось выйти.");await changed();}catch(cause){setActionError(cause instanceof Error?cause.message:"Не удалось выйти. Повторите попытку.");}finally{setBusy(false);}}
   return <>
-    {actionError&&createPortal(<div className="account-action-error" role="alert"><span>{actionError}</span><button aria-label="Закрыть сообщение" onClick={()=>setActionError("")}><X size={16}/></button></div>,document.body)}
     {session?.user?<AccountMenu key={`account-menu:${session.user.id}`} user={session.user} busy={busy} profile={()=>{setError("");setOpen(true);}} account={()=>{void navigateAccount();}} logout={()=>{void logout();}}/>:<button className="account-button" onClick={()=>{setError("");setOpen(true);}} aria-label="Войти в Sinex" title="Вход и регистрация"><UserRound size={17}/><span className="account-label">Войти</span></button>}
-    {open&&session?.user&&<ProfileWindow key={`profile-window:${session.user.id}`} close={()=>setOpen(false)}><ProfileEditor user={session.user} ownerId={session.ownerId} avatar={<AccountAvatar key={session.user.id} user={session.user} large/>} changed={changed} onBusy={setBusy}/>{error&&<p className="account-error" role="alert">{error}</p>}</ProfileWindow>}
+    {open&&session?.user&&<ProfileWindow key={`profile-window:${session.user.id}`} close={()=>setOpen(false)}><ProfileEditor user={session.user} ownerId={session.ownerId} avatar={<AccountAvatar key={session.user.id} user={session.user} large/>} changed={changed} onBusy={setBusy}/></ProfileWindow>}
     <dialog ref={dialog} className="account-dialog" onCancel={()=>setOpen(false)} onClose={()=>{if(!session?.user)setOpen(false);}} onClick={event=>{if(event.target===dialog.current){const box=dialog.current.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)setOpen(false);}}} aria-labelledby="account-title">
       <button className="account-close" onClick={()=>setOpen(false)} aria-label="Закрыть"><X size={19}/></button>
       <h2 id="account-title">{session?.user?"Профиль":"Добро пожаловать в Sinex"}</h2>
@@ -123,7 +125,6 @@ export function AccountButton() {
           <button className="account-submit" disabled={busy||!session}>{busy?"Подождите…":tab==="register"?"Создать аккаунт":"Войти"}</button>
         </form>
       </>}
-      {error&&<p className="account-error" role="alert">{error}</p>}
     </dialog>
   </>;
 }

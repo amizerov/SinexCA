@@ -1,4 +1,4 @@
-export type ExchangeId = "binance" | "bybit" | "okx" | "bitget" | "gate" | "kraken" | "coinbase" | "kucoin" | "bitfinex" | "htx" | "mexc" | "whitebit" | "cryptocom";
+export type ExchangeId = "binance" | "bybit" | "okx" | "bitget" | "gate" | "kraken" | "coinbase" | "kucoin" | "bitfinex" | "htx" | "mexc" | "whitebit" | "cryptocom" | "gemini";
 export type MarketType = "spot";
 export const TIMEFRAMES = ["1s","10s","30s","1m","3m","5m","15m","30m","1h","2h","3h","4h","6h","8h","12h","1d","2d","3d","1w","14d","15d","1M","3M","1y"] as const;
 export type Timeframe = (typeof TIMEFRAMES)[number];

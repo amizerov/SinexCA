@@ -2,7 +2,7 @@ import { subscribeMarketStream } from "../lib/market/stream.ts";
 import { exchangeTimeframes,wsInterval } from "../lib/market/intervals.ts";
 import { mkdir,writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
-const symbols={binance:"BTCUSDT",bybit:"BTCUSDT",okx:"BTC-USDT",bitget:"BTCUSDT",gate:"BTC_USDT",kraken:"XBTUSDT",kucoin:"BTC-USDT",bitfinex:"tBTCUST",htx:"btcusdt",mexc:"BTCUSDT",whitebit:"BTC_USDT",cryptocom:"BTC_USDT"};
+const symbols={binance:"BTCUSDT",bybit:"BTCUSDT",okx:"BTC-USDT",bitget:"BTCUSDT",gate:"BTC_USDT",kraken:"XBTUSDT",kucoin:"BTC-USDT",bitfinex:"tBTCUST",htx:"btcusdt",mexc:"BTCUSDT",whitebit:"BTC_USDT",cryptocom:"BTC_USDT",gemini:"btcusd"};
 const originalFetch=globalThis.fetch;globalThis.fetch=(input,init)=>originalFetch(typeof input==="string"&&input.startsWith("/")?new URL(input,process.env.BASE_URL||"http://localhost:3002"):input,init);
 const jobs=Object.entries(symbols).flatMap(([exchange,symbol])=>exchangeTimeframes(exchange).filter(tf=>wsInterval(exchange,tf)).map(timeframe=>({exchange,symbol,timeframe}))),results=[];
 await Promise.all(jobs.map(({exchange,symbol,timeframe})=>new Promise(resolve=>{

@@ -12,6 +12,7 @@ import {useFloatingWindow} from "@/hooks/use-floating-window";
 import {useOrderBookDock} from "@/hooks/use-order-book-dock";
 import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
 import {useClientReady} from "@/hooks/use-client-ready";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 
 export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:TradingPair;lastPrice?:number;close:()=>void;pending?:boolean}){
   const root=useRef<HTMLElement>(null),menu=useRef<HTMLDivElement>(null),menuButton=useRef<HTMLButtonElement>(null);
@@ -43,6 +44,7 @@ export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:Tradi
   const maximum=Math.max(...visibleDepth.map(depth),Number.MIN_VALUE);
   const context=`${EXCHANGES[pair.exchange].name} · ${pair.baseAsset}/${pair.quoteAsset}`;
   const status=stale?"Данные устарели":error?error:!book?"Подключение…":mode==="ws"?"WebSocket":"REST · 1с";
+  useFloatingNotice(`orderbook:${marketKey}`,error||(stale?`${context}: данные стакана устарели`:undefined),{tone:stale&&!error?"warning":"error",actionLabel:"Повторить",action:refresh});
   function toggleMenu(){
     if(menuPosition){setMenuPosition(null);return;}
     const rect=menuButton.current!.getBoundingClientRect(),height=Math.min(390,window.innerHeight-16);
@@ -72,8 +74,6 @@ export function OrderBookDialog({pair,lastPrice,close,pending=false}:{pair:Tradi
       <button type="button" onClick={close} aria-label="Закрыть стакан"><X size={15}/></button>
     </header>
     <p id={contextId} className="sr-only">{context}. Цена, количество в {pair.baseAsset}, сумма в {pair.quoteAsset}. Суммы относятся к загруженной глубине.</p>
-    {error&&<div className="book-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
-    {stale&&!error&&<p className="book-stale-warning" role="status">Данные устарели</p>}
     <div className={`book-table ${stale?"book-stale":""}`} role="table" aria-label={`Заявки ${pair.baseAsset}/${pair.quoteAsset}`} aria-busy={!book&&!error}>
       <div className="book-row book-columns" role="row">
         <span role="columnheader" title={`Цена в ${pair.quoteAsset}${priceStep?" · сгруппированные уровни":""}`}>Цена <small>{pair.quoteAsset}</small></span>

@@ -12,6 +12,7 @@ import { htx } from "./htx";
 import { mexc } from "./mexc";
 import { whitebit } from "./whitebit";
 import { cryptocom } from "./cryptocom";
+import { gemini } from "./gemini";
 import type { ExchangeId } from "../types";
 import type { ExchangeAdapter } from "./adapter";
-export const exchangeRegistry: Record<ExchangeId, ExchangeAdapter> = { binance, bybit, okx, bitget, gate, kraken, coinbase, kucoin, bitfinex, htx, mexc, whitebit, cryptocom };
+export const exchangeRegistry: Record<ExchangeId, ExchangeAdapter> = { binance, bybit, okx, bitget, gate, kraken, coinbase, kucoin, bitfinex, htx, mexc, whitebit, cryptocom, gemini };

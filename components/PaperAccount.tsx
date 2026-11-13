@@ -6,6 +6,7 @@ import {AccountHistory} from "./AccountHistory";
 import {AccountPositions} from "./AccountPositions";
 import {EXCHANGES} from "@/lib/market/exchange-config";
 import type {ExchangeId} from "@/lib/market/types";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 interface PendingDeposit {amount:string;currency?:PaperCurrency;mutationId:string}
 function pendingDeposit(key:string):PendingDeposit|null{try{const value=JSON.parse(localStorage.getItem(key)||"null");return paperDepositSchema.safeParse(value).success?value:null;}catch{return null;}}
 export function PaperAccount({ownerId,guest}:{ownerId:string;guest:boolean}){
@@ -16,6 +17,8 @@ export function PaperAccount({ownerId,guest}:{ownerId:string;guest:boolean}){
   const [historyPage,setHistoryPage]=useState(0);
   const [depositOpen,setDepositOpen]=useState(false),[currency,setCurrency]=useState<PaperCurrency>(initialPending?.currency||"USDT"),[depositError,setDepositError]=useState("");
   const depositDialog=useRef<HTMLDialogElement>(null),depositTrigger=useRef<HTMLButtonElement>(null);
+  useFloatingNotice(`paper-account:${ownerId}`,error,{actionLabel:!snapshot?"Повторить":undefined,action:!snapshot?()=>void load():undefined});
+  useFloatingNotice(`paper-deposit:${ownerId}`,depositError);
   useEffect(()=>{if(depositOpen)depositDialog.current?.showModal();else depositDialog.current?.close();},[depositOpen]);
   const load=useCallback(async(signal?:AbortSignal)=>{
     if(saving.current||signal?.aborted)return;const version=++requestVersion.current;setLoading(true);
@@ -65,7 +68,6 @@ export function PaperAccount({ownerId,guest}:{ownerId:string;guest:boolean}){
           <label htmlFor="paper-currency">Валюта</label><select id="paper-currency" value={currency} disabled={busy} onChange={event=>{const next=event.target.value as PaperCurrency;setCurrency(next);setAmount(["BTC","ETH","BNB"].includes(next)?"1":"10000");setDepositError("");}}>{PAPER_CURRENCIES.map(asset=><option key={asset} value={asset}>{asset}</option>)}</select>
           <label htmlFor="paper-amount">Сумма, {currency}</label><div className="paper-deposit-fields"><input id="paper-amount" aria-label="Сумма тестового пополнения" type="text" inputMode="decimal" required maxLength={24} value={amount} disabled={busy} onChange={event=>{setAmount(event.target.value);setDepositError("");}}/></div>
           <div className="paper-presets">{(["BTC","ETH","BNB"].includes(currency)?[0.01,0.1,1]:[1000,10000,100000]).map(value=><button key={value} type="button" disabled={busy} onClick={()=>{setAmount(String(value));setDepositError("");}}>{new Intl.NumberFormat("ru-RU").format(value)}</button>)}</div>
-          {depositError&&<p className="account-error" role="alert">{depositError}</p>}
           <button type="submit" className="account-submit" disabled={busy||loading}>{busy?"Пополняем…":"Пополнить"}</button>
         </form>
       </dialog>
@@ -73,6 +75,5 @@ export function PaperAccount({ownerId,guest}:{ownerId:string;guest:boolean}){
       <AccountPositions portfolio={snapshot.portfolio}/>
       <AccountHistory snapshot={snapshot} loading={busy||loading} page={historyPage} setPage={setHistoryPage} refresh={()=>void load()}/>
    </>}
-    {error&&<div className="account-error" role="alert">{error}{!snapshot&&<button type="button" className="button" onClick={()=>void load()}>Повторить</button>}</div>}
   </div>;
 }

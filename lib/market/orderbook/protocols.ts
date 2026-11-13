@@ -3,12 +3,13 @@ import {object,makeBook,bookLevels,type OrderBook} from "./model";
 import {whitebitBookProtocol} from "./whitebit";
 import {cryptocomBookProtocol} from "./cryptocom";
 export interface BookProtocol {url:string;subscriptions:unknown[];subscribeDelayMs?:number;ping?:unknown;pingMs?:number;reply?:(input:unknown)=>unknown;decode:(input:unknown)=>OrderBook|undefined}
-export const BOOK_STREAM_EXCHANGES=["binance","bybit","okx","gate","htx","kucoin","whitebit","cryptocom"];
+export const BOOK_STREAM_EXCHANGES=["binance","bybit","okx","gate","htx","kucoin","whitebit","cryptocom","gemini"];
 export async function bookProtocol(pair:TradingPair,signal:AbortSignal):Promise<BookProtocol|undefined>{
   const {exchange,symbol}=pair,book=(bids:unknown,asks:unknown,time?:unknown)=>makeBook(exchange,symbol,bids,asks,time);
   switch(exchange){
     case "whitebit":return whitebitBookProtocol(pair);
     case "cryptocom":return cryptocomBookProtocol(pair);
+    case "gemini":return {url:"wss://ws.gemini.com",subscriptions:[{id:"sinex-depth",method:"SUBSCRIBE",params:[`${symbol.toLowerCase()}@depth20@100ms`]}],decode(input){const data=object(input);return Array.isArray(data.bids)&&Array.isArray(data.asks)?book(data.bids,data.asks):undefined;}};
     case "binance":return {url:`wss://data-stream.binance.vision/ws/${symbol.toLowerCase()}@depth20@100ms`,subscriptions:[],decode(input){const data=object(input);return data.lastUpdateId!=null?book(data.bids,data.asks):undefined;}};
     case "okx":return {url:"wss://ws.okx.com:8443/ws/v5/public",subscriptions:[{op:"subscribe",args:[{channel:"books5",instId:symbol}]}],ping:"ping",pingMs:15000,decode(input){const data=object(input),arg=object(data.arg);if(arg.channel!=="books5"||arg.instId!==symbol||data.action!=="snapshot")return;const item=object(Array.isArray(data.data)?data.data[0]:null);return book(item.bids,item.asks,item.ts);}};
     case "gate":return {url:"wss://api.gateio.ws/ws/v4/",subscriptions:[{time:Math.floor(Date.now()/1000),channel:"spot.order_book",event:"subscribe",payload:[symbol,"20","100ms"]}],ping:{channel:"spot.ping"},decode(input){const data=object(input),item=object(data.result);return data.channel==="spot.order_book"&&data.event==="update"&&item.s===symbol?book(item.bids,item.asks,item.t):undefined;}};

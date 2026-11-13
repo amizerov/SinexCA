@@ -15,6 +15,7 @@ import {usePanelDock} from "./PanelDock";
 import {TradesPlacementMenu} from "./TradesPlacementMenu";
 import type {TradeConnection} from "@/lib/market/trades/stream";
 import {useClientReady} from "@/hooks/use-client-ready";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 const timeFormat=new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 const dateFormat=new Intl.DateTimeFormat("ru-RU",{dateStyle:"short",timeStyle:"medium"});
 export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=false,pending=false}:{pair:TradingPair;trades:TradeTick[];status:StreamStatus;connection?:TradeConnection;demo?:DemoState;error?:string;inColumn?:boolean;pending?:boolean}){
@@ -29,6 +30,7 @@ export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=f
   const rows=mine?own:trades.map((t,i)=>({...t,id:t.id??`${t.time}:${t.receivedAt}:${i}`}));
   const live=status==="live",context=`${EXCHANGES[pair.exchange].name} · ${pair.baseAsset}/${pair.quoteAsset}`;
   const quiet=!!connection?.connected&&!!connection.subscribed&&!live;
+  useFloatingNotice(`trades:${pair.exchange}:${pair.symbol}`,mine?error:undefined);
   const statusText=mine?"Мои тестовые исполнения":live?"Сделки WebSocket":quiet?"WebSocket подключён, новых сделок нет":status==="connecting"||status==="reconnecting"?"Подключение к потоку сделок":"Поток сделок недоступен";
   function keys(event:KeyboardEvent<HTMLElement>){if(event.key==="Escape"){event.stopPropagation();close();}}
   const content=<section data-dock-panel="trades" className={`trades-window ${docked?"trades-docked":""}`} role="dialog" aria-modal="false" aria-labelledby={title} tabIndex={-1}
@@ -42,7 +44,6 @@ export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=f
     </header>
     <div className="trades-tabs" role="tablist" aria-label="Источник сделок" onKeyDown={e=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(e.key))return;e.preventDefault();const next=e.key==="Home"?"all":e.key==="End"?"mine":mine?"all":"mine";preferences.update({tradesTab:next});e.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();}}>{(["all","mine"] as const).map(tab=><button key={tab} id={`${tabs}-${tab}`} data-tab={tab} role="tab" aria-selected={settings.tradesTab===tab} aria-controls={panel} tabIndex={settings.tradesTab===tab?0:-1} onClick={()=>preferences.update({tradesTab:tab})}>{tab==="all"?"Все":"Мои"}</button>)}<span title={context}>{EXCHANGES[pair.exchange].name} · {pair.quoteAsset}</span></div>
     <div className="trades-content" role="tabpanel" id={panel} aria-labelledby={`${tabs}-${settings.tradesTab}`}>
-      {mine&&error&&<p className="book-error" role="alert">{error}</p>}
       {!mine&&!live&&<p className="trades-notice" role="status">{quiet?"Новых сделок пока нет":status==="connecting"||status==="reconnecting"?"Подключение…":"Нет свежего потока сделок"}</p>}
       <div className="trades-columns" aria-hidden="true"><span>Цена <small>{pair.quoteAsset}</small></span><span>Кол-во <small>{pair.baseAsset}</small></span><span>Время</span></div>
       <div className="trades-scroll" role="table" aria-label={mine?"Мои тестовые сделки":"Рыночные сделки"}>

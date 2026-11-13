@@ -10,7 +10,7 @@ import {parseOKXCoinPage} from "@/lib/market/coin-exchange-profile";
 import {verifiedCoinHistory} from "@/lib/market/verified-coin-history";
 const cache=new Map<string,{data:CoinProfile;expires:number}>(),pending=new Map<string,Promise<CoinProfile>>(),failures=new Map<string,number>();
 const marketCache=new Map<string,CoinCandidate>();
-const exchangeIds:Record<ExchangeId,string>={binance:"binance",bybit:"bybit_spot",okx:"okex",bitget:"bitget",gate:"gate",kraken:"kraken",coinbase:"gdax",kucoin:"kucoin",bitfinex:"bitfinex",htx:"huobi",mexc:"mxc",whitebit:"whitebit",cryptocom:"crypto_com"};
+const exchangeIds:Record<ExchangeId,string>={binance:"binance",bybit:"bybit_spot",okx:"okex",bitget:"bitget",gate:"gate",kraken:"kraken",coinbase:"gdax",kucoin:"kucoin",bitfinex:"bitfinex",htx:"huobi",mexc:"mxc",whitebit:"whitebit",cryptocom:"crypto_com",gemini:"gemini"};
 export class CoinInfoError extends Error {constructor(message:string,public status:number){super(message);}}
 export interface CoinInfoOptions {id?:string;provider?:CoinProvider;exchange?:ExchangeId;quote?:string}
 export type CoinResolution={data:CoinProfile;stale:boolean}|{candidates:CoinCandidate[]};

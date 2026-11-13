@@ -1,7 +1,7 @@
 import { subscribeMarketStream } from "../lib/market/stream.ts";
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
-const symbols = { binance: "BTCUSDT", bybit: "BTCUSDT", okx: "BTC-USDT", bitget: "BTCUSDT", gate: "BTC_USDT", kraken: "XBTUSDT", kucoin: "BTC-USDT", bitfinex: "tBTCUST", htx: "btcusdt", mexc: "BTCUSDT", whitebit:"BTC_USDT",cryptocom:"BTC_USDT" };
+const symbols = { binance: "BTCUSDT", bybit: "BTCUSDT", okx: "BTC-USDT", bitget: "BTCUSDT", gate: "BTC_USDT", kraken: "XBTUSDT", kucoin: "BTC-USDT", bitfinex: "tBTCUST", htx: "btcusdt", mexc: "BTCUSDT", whitebit:"BTC_USDT",cryptocom:"BTC_USDT",gemini:"btcusd" };
 const targets = process.argv.length > 2 ? Object.fromEntries(Object.entries(symbols).filter(([id]) => process.argv.slice(2).includes(id))) : symbols;
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = (input, init) => nativeFetch(typeof input === "string" && input.startsWith("/") ? new URL(input, process.env.BASE_URL || "http://127.0.0.1:3004") : input, init);

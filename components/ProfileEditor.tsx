@@ -3,6 +3,7 @@ import {useRef,useState,type FormEvent,type ReactNode} from "react";
 import {Camera,Trash2,Save,KeyRound} from "lucide-react";
 import type {AccountUser} from "@/lib/auth/types";
 import {profileNameSchema,changePasswordSchema} from "@/lib/auth/profile";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 async function avatarPng(file:File):Promise<Blob>{
   if(file.size>5*1024*1024)throw new Error("Выберите фото размером до 5 МБ.");
   if(!["image/png","image/jpeg","image/webp","image/gif","image/avif"].includes(file.type))throw new Error("Поддерживаются PNG, JPEG, WebP, GIF и AVIF.");
@@ -18,6 +19,7 @@ async function avatarPng(file:File):Promise<Blob>{
 export function ProfileEditor({user,ownerId,avatar,changed,onBusy}:{user:AccountUser;ownerId:string;avatar:ReactNode;changed:()=>Promise<void>;onBusy:(busy:boolean)=>void}){
   const [name,setName]=useState(user.displayName||""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const saving=useRef(false),fileInput=useRef<HTMLInputElement>(null);
+  useFloatingNotice(`profile:${ownerId}`,error);
   async function request(url:string,method:string,body:BodyInit,binary=false){
     const response=await fetch(url,{method,headers:{"X-Workspace-Id":ownerId,"Content-Type":binary?"image/png":"application/json"},body,signal:AbortSignal.timeout(15000)}),result=await response.json();
     if(!response.ok)throw new Error(result.error?.message||"Не удалось сохранить профиль.");
@@ -43,6 +45,6 @@ export function ProfileEditor({user,ownerId,avatar,changed,onBusy}:{user:Account
       <label>Повторите новый пароль<input name="confirmPassword" type="password" autoComplete="new-password" required minLength={10} maxLength={128} disabled={busy}/></label>
       <button className="button profile-password-save" type="submit" disabled={busy}>Сохранить пароль</button>
     </form></details>
-    {busy&&<p className="account-hint" role="status">Сохраняем…</p>}{notice&&<p className="profile-notice" role="status">{notice}</p>}{error&&<p className="account-error" role="alert">{error}</p>}
+    {busy&&<p className="account-hint" role="status">Сохраняем…</p>}{notice&&<p className="profile-notice" role="status">{notice}</p>}
   </div>;
 }

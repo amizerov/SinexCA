@@ -87,6 +87,7 @@ export function streamSettings(exchange: ExchangeId, { symbol, timeframe, wsSymb
     case "gate": return { url: "wss://api.gateio.ws/ws/v4/", message: { time: Math.floor(Date.now() / 1000), channel: "spot.candlesticks", event: "subscribe", payload: [bar, symbol] } };
     case "kraken": return { url: "wss://ws.kraken.com/v2", message: { method: "subscribe", params: { channel: "ohlc", symbol: [wsSymbol], interval: minutes[timeframe] } } };
     case "coinbase": return { url: "wss://ws-feed.exchange.coinbase.com", message: { type: "subscribe", product_ids: [symbol], channels: ["ticker", "heartbeat"] } };
+    case "gemini": return { url: "wss://ws.gemini.com", message: { id: "sinex-chart", method: "SUBSCRIBE", params: [`${symbol.toLowerCase()}@trade`] } };
     default: throw new Error("Используйте нативный адаптер Binance");
   }
 }
@@ -98,6 +99,10 @@ export function decodeForeignStream(exchange: ExchangeId, input: unknown, option
   if (exchange === "coinbase") {
     if (x.type === "ticker" && x.product_id === symbol) return { price: finiteNumber.pipe(z.number().positive()).parse(x.price) };
     return {};
+  }
+  if(exchange==="gemini"){
+    if(String(x.s).toLowerCase()!==symbol.toLowerCase())return {};
+    return {price:finiteNumber.pipe(z.number().positive()).parse(x.p)};
   }
   if (exchange === "bybit") {
     if (x.topic !== `kline.${wsInterval(exchange,timeframe)}.${symbol}`) return {};
@@ -121,7 +126,7 @@ export function decodeForeignStream(exchange: ExchangeId, input: unknown, option
   return { candle: normalizeCandles(rows).at(-1) };
 }
 export function subscribeMarketStream(exchange: ExchangeId, options: CandleStreamOptions): () => void {
-  if(exchange!=="coinbase"&&!wsInterval(exchange,options.timeframe)){options.onStatus("offline");return()=>{};}
+  if(exchange!=="coinbase"&&exchange!=="gemini"&&!wsInterval(exchange,options.timeframe)){options.onStatus("offline");return()=>{};}
   const health=new StreamHealth(exchange);let status:StreamStatus="connecting",openedAt=0;
   const emit=(next:StreamStatus)=>{if(next!==status){status=next;options.onStatus(next);}};
   options.onStatus("connecting");

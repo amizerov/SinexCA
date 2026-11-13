@@ -19,11 +19,12 @@ import {useExecutionMarkers} from "@/hooks/use-execution-markers";
 import {ExecutionTooltip} from "./ExecutionTooltip";
 import {CURRENT_PRICE_COLOR,orderColor,orderLevels} from "@/lib/paper/order-levels";
 import {DemoOrderMarkers} from "./DemoOrderMarkers";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 
 import {useChartViewport} from "@/hooks/use-chart-viewport";
 
-interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string; retry: () => void }
-export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error, retry }: Props) {
+interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
+export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
   const {session}=useAccount();
   const timeZone=useBrowserTimeZone();
   const container = useRef<HTMLDivElement>(null);
@@ -151,6 +152,8 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   useChartViewport(chart,candles,exchange+":spot:"+symbol+":"+timeframe);
 
   const executions=useExecutionMarkers(chart,series,fills,candles,exchange,symbol,timeframe,positions,showTrades);
+  const tradesWarning=showTrades?(tradesError||(tradesTruncated?"Показаны последние 10 000 исполнений диапазона":executions.grouped.outside>0?`${executions.grouped.outside} исполнений без свечи в истории`:undefined)):undefined;
+  useFloatingNotice(`chart-trades:${exchange}:${symbol}`,tradesWarning,{tone:"warning"});
   const basisChange=executions.breakEven&&tickPrice!==undefined?(tickPrice/executions.breakEven-1)*100:undefined;
   const legend = hovered?.exchangeName === exchangeName && hovered.symbol === symbol && hovered.timeframe === timeframe ? hovered.candle : candles.at(-1);
   return <div className={`chart-block ${expanded ? "expanded" : ""}`}>
@@ -171,11 +174,10 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
       <span className="sr-only" data-execution-count={showTrades?executions.grouped.markers.length:0}>{showTrades?executions.grouped.markers.map(t=>`${t.side==="buy"?"Покупка":"Продажа"}: ${t.quantity} ${t.base}, цена ${t.price} ${t.quote}`).join("; "):"Метки сделок скрыты"}</span>
       {showTrades&&executions.tooltip&&<ExecutionTooltip {...executions.tooltip}/>}
       {showTrades&&executions.average!==undefined&&<div className="chart-entry-summary" data-entry-price={executions.average} title="Средняя себестоимость остатка с комиссией покупки. Пунктир — ориентир безубыточности с DEMO-комиссией продажи 0,1%. Процент сравнивает текущую цену с этим ориентиром, без оценки глубины стакана."><span>Вход {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:8}).format(executions.average)} {executions.quote}</span>{basisChange!==undefined&&<strong className={basisChange>=0?"positive":"negative"}>{basisChange>0?"+":""}{basisChange.toFixed(2)}%</strong>}</div>}
-      {showTrades&&(tradesError||tradesTruncated||executions.grouped.outside>0)&&<span className="chart-trades-warning" role="status">{tradesError||(tradesTruncated?"Показаны последние 10 000 исполнений диапазона":`${executions.grouped.outside} исполнений без свечи в истории`)}</span>}
       {onOrder&&<DemoOrderMarkers chart={chart} series={series} container={container} orders={activeOrders} onInspect={order=>onOrder({order,price:order.limit??order.stop??tickPrice??1,side:order.side,type:order.type})}/>}
       {context&&createPortal(<div className="demo-chart-menu" role="menu" aria-label="Действия с ценой" style={{left:context.x,top:context.y}} onPointerDown={e=>e.stopPropagation()}>{(["buy","sell"] as const).map(side=><button role="menuitem" key={side} onClick={()=>{onOrder?.({side,price:context.price,type:"limit"});setContext(undefined);}}>{side==="buy"?"Купить":"Продать"} · Лимит</button>)}<button role="menuitem" onClick={()=>{onOrder?.({side:"buy",price:context.price,type:"stop_limit"});setContext(undefined);}}>Новая стоп-заявка…</button><button role="menuitem" onClick={()=>{void navigator.clipboard?.writeText(String(context.price));setContext(undefined);}}>Копировать цену</button></div>,document.body)}
       {session&&<ChartDrawings key={`${session.ownerId}:${exchange}:spot:${symbol}`} ownerId={session.ownerId} scope={{ exchange, marketType: "spot", symbol }} chart={chart} series={series} candles={candles} />}
-      {!candles.length && <div className="chart-overlay" role="status">{loading ? <><span className="loader" /><strong>Загружаем историю рынка</strong><span>История {exchangeName} Spot</span></> : <><strong>{error ? "Данные пока недоступны" : "Выберите торговую пару"}</strong>{error && <><span>{error}</span><button className="button" onClick={retry}>Повторить загрузку</button></>}</>}</div>}
+      {!candles.length && <div className="chart-overlay" role="status">{loading ? <><span className="loader" /><strong>Загружаем историю рынка</strong><span>История {exchangeName} Spot</span></> : <strong>{error ? "Нет данных для отображения" : "Выберите торговую пару"}</strong>}</div>}
     </div>
     <div className="chart-caption"><span title="Локальное время браузера. Начало и закрытие свечей определяет биржа.">Время: {timeZone} <span className="separator">/</span> {candles.length ? `${candles.length} свечей` : "Ожидание данных"}</span><a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Графики TradingView ↗</a></div>
   </div>;

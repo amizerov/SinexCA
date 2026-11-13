@@ -12,6 +12,7 @@ import type {useDemoOrders} from "@/hooks/use-demo-orders";
 import {useOrderBook} from "@/hooks/use-order-book";
 import {OrderDetailsDialog} from "./OrderDetailsDialog";
 import {useDraggableDialog} from "@/hooks/use-draggable-dialog";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 export interface OrderDraft {side:"buy"|"sell";price:number;type:OrderType;order?:DemoOrder}
 type Orders=ReturnType<typeof useDemoOrders>;
 type DialogProps={pair:TradingPair;draft:OrderDraft;currentPrice?:number;orders:Orders;close:()=>void};
@@ -23,6 +24,7 @@ function NewOrderDialog({pair,draft,currentPrice,orders,close}:DialogProps){
   const floating=useDraggableDialog(dialog,"order");
   function closeWindow(){floating.remember();close();}
   const market=type.endsWith("market"),stopped=type.startsWith("stop"),source=useOrderBook(pair),book=source.book;
+  useFloatingNotice(`demo-order:${pair.exchange}:${pair.symbol}`,error||source.error);
   const best=(side==="buy"?book?.asks[0]?.price:book?.bids[0]?.price)??draft.price,rate=market?best:Number(limit),balances=orders.data?.account.balances||[],currency=side==="buy"?pair.quoteAsset:pair.baseAsset,balance=balances.find(b=>b.currency===currency),portfolio=orders.data?.account.portfolio;
   const venueUnits=portfolio?(portfolio.venueBalances.find(b=>b.exchange===pair.exchange&&b.currency===currency)?.availableUnits||0)+(portfolio.unassigned.find(b=>b.currency===currency)?.availableUnits||0):balance?.availableUnits||0;
   const available=venueUnits/10**paperDecimals(currency);
@@ -51,7 +53,6 @@ function NewOrderDialog({pair,draft,currentPrice,orders,close}:DialogProps){
       <div className="demo-estimate"><span>Доступно</span><strong>{paperAmount(Math.round(available*10**paperDecimals(currency)),paperDecimals(currency))} {currency}</strong><span>Сумма ≈</span><strong>{price(estimated)} {pair.quoteAsset}</strong><span>DEMO-комиссия</span><strong>0,1% · {pair.quoteAsset}</strong>{!stopped&&<><span title="Расчёт по текущим встречным заявкам; исполнение лимитной заявки может произойти позднее">{requested>0&&taken>0?"Средняя цена ≈":"Лучшая цена"}</span><strong data-order-book-price>{price(bookPrice)} {pair.quoteAsset}</strong></>}</div>
       {market&&<p className="account-hint">{type==="stop_market"?"Защита отсчитывается от стоп-цены.":"Защита отсчитывается от лучшей цены стакана на сервере при создании."} Остаток за пределами защиты или глубины отменяется.</p>}
       <p className="account-hint"><Link href="/account">Пополнить счёт</Link></p>
-      {(error||source.error)&&<p className="account-error" role="alert">{error||source.error}</p>}
       <button type="submit" className="account-submit" disabled={!orders.data}>{busy?"Сохраняем…":"Создать заявку"}</button>
     </fieldset></form>
   </dialog>,document.body);
@@ -59,9 +60,12 @@ function NewOrderDialog({pair,draft,currentPrice,orders,close}:DialogProps){
 export function DemoOrdersPanel({orders,onSelect}:{orders:Orders;onSelect:(order:DemoOrder)=>void}){
   const [expanded,setExpanded]=useState(false),[tab,setTab]=useState("open"),[error,setError]=useState(""),[busy,setBusy]=useState("");
   const all=orders.data?.orders||[],open=all.filter(isOpen),visible=tab==="open"?open:tab==="filled"?all.filter(o=>o.filled>0):all;
+  const healthWarning=orders.data?.health.errors.length?`Исполнение ожидает свежих данных: ${orders.data.health.errors.join("; ")}`:undefined;
+  useFloatingNotice("demo-orders",error||orders.error);
+  useFloatingNotice("demo-orders-health",healthWarning,{tone:"warning"});
   async function cancel(o:DemoOrder){setBusy(o.id);try{await orders.request({action:"cancel",id:o.id});setError("");}catch(e){setError(e instanceof Error?e.message:"Ошибка отмены");}finally{setBusy("");}}
   return <section className={`demo-orders-panel ${expanded?"expanded":""}`} aria-label="Тестовые заявки"><div className="demo-orders-tabs"><button onClick={()=>setExpanded(!expanded)} aria-expanded={expanded} title="Развернуть заявки">{expanded?"▾":"▸"} Заявки</button>{[["open",`Открытые (${open.length})`],["filled","Исполнения"],["history","История"]].map(([key,name])=><button key={key} aria-pressed={tab===key} onClick={()=>{setTab(key);setExpanded(true);}}>{name}</button>)}</div>
-    {expanded&&<div className="demo-orders-scroll">{(error||orders.error)&&<p role="alert" className="account-error">{error||orders.error}</p>}{orders.data?.health.errors.length? <p className="account-error">Исполнение ожидает свежих данных: {orders.data.health.errors.join("; ")}</p>:null}{tab==="filled"?<DemoFillTable orders={orders} onSelect={onSelect}/>:!visible.length?<p className="account-hint">Заявок пока нет</p>:<table><thead><tr><th>Биржа / пара</th><th>Заявка</th><th>Цена / стоп</th><th>Исполнено</th><th>Статус</th><th/></tr></thead><tbody>{visible.map(o=><tr key={o.id} className="order-market-row" tabIndex={0} title={`Открыть ${o.base}/${o.quote} · ${EXCHANGES[o.exchange].name}`} onClick={()=>onSelect(o)} onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==="Enter"||event.key===" ")){event.preventDefault();onSelect(o);}}}><td>{EXCHANGES[o.exchange].name} · {o.base}/{o.quote}</td><td className={o.side==="buy"?"positive":"negative"}>{orderLabel(o)}</td><td>{price(o.limit??undefined)}{o.stop?` / ${price(o.stop)}`:""}</td><td>{price(o.filled/ATOMS)} / {price(o.quantity/ATOMS)}</td><td title={o.note}>{!o.triggered?"Ожидает стоп":paperOrderStatus(o.status)}</td><td>{isOpen(o)&&<button className="button" disabled={!!busy} onClick={event=>{event.stopPropagation();void cancel(o);}} aria-label={`Отменить ${o.id}`}><X size={12}/></button>}</td></tr>)}</tbody></table>}</div>}
+    {expanded&&<div className="demo-orders-scroll">{tab==="filled"?<DemoFillTable orders={orders} onSelect={onSelect}/>:!visible.length?<p className="account-hint">Заявок пока нет</p>:<table><thead><tr><th>Биржа / пара</th><th>Заявка</th><th>Цена / стоп</th><th>Исполнено</th><th>Статус</th><th/></tr></thead><tbody>{visible.map(o=><tr key={o.id} className="order-market-row" tabIndex={0} title={`Открыть ${o.base}/${o.quote} · ${EXCHANGES[o.exchange].name}`} onClick={()=>onSelect(o)} onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==="Enter"||event.key===" ")){event.preventDefault();onSelect(o);}}}><td>{EXCHANGES[o.exchange].name} · {o.base}/{o.quote}</td><td className={o.side==="buy"?"positive":"negative"}>{orderLabel(o)}</td><td>{price(o.limit??undefined)}{o.stop?` / ${price(o.stop)}`:""}</td><td>{price(o.filled/ATOMS)} / {price(o.quantity/ATOMS)}</td><td title={o.note}>{!o.triggered?"Ожидает стоп":paperOrderStatus(o.status)}</td><td>{isOpen(o)&&<button className="button" disabled={!!busy} onClick={event=>{event.stopPropagation();void cancel(o);}} aria-label={`Отменить ${o.id}`}><X size={12}/></button>}</td></tr>)}</tbody></table>}</div>}
   </section>;
 }
 

@@ -528,3 +528,18 @@ html[data-theme="light"] .account-tabs button[aria-pressed="true"] {color:#205f2
 .saved-market-row button:disabled{opacity:.6;cursor:default}
 .saved-market-row strong,.saved-market-row small{display:block;overflow-wrap:anywhere}
 .saved-market-row small{opacity:.65;font-size:11px;margin-top:3px}
+
+/* Notices float above the terminal and never participate in panel or chart layout. */
+.floating-notices{position:fixed;z-index:250;top:64px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;width:min(440px,calc(100vw - 24px));pointer-events:none}
+.floating-notice.error-banner{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:10px;width:100%;min-height:0;margin:0;padding:11px 12px;border:1px solid #765331;border-radius:12px;background:#302519f2;color:#f0d0a5;font-size:11px;line-height:1.45;box-shadow:0 12px 32px #0008,0 2px 8px #0005;backdrop-filter:blur(12px);pointer-events:auto;animation:floating-notice-in .18s ease-out}
+.floating-notice.error{border-color:#804a37;background:#352119f2;color:#f2bba6}
+.floating-notice>svg{align-self:start;margin-top:1px;flex-shrink:0}
+.floating-notice>span{white-space:normal;overflow-wrap:anywhere}
+.floating-notice button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:6px;color:inherit}
+.floating-notice-action{padding:5px 8px;border:1px solid currentColor;font-weight:600}
+.floating-notice-close{padding:4px;opacity:.75}
+.floating-notice button:hover{background:#ffffff12;opacity:1}
+@keyframes floating-notice-in{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:none}}
+html[data-theme="light"] .floating-notice.error-banner{background:#fff9edf2;color:#744b17;border-color:#d4ad72;box-shadow:0 12px 32px #38432e24,0 2px 8px #38432e1c}
+html[data-theme="light"] .floating-notice.error{background:#fff3edf2;color:#8b3f29;border-color:#d5a08e}
+@media(max-width:600px){.floating-notices{top:52px;right:8px;width:calc(100vw - 16px)}.floating-notice.error-banner{grid-template-columns:auto minmax(0,1fr) auto;padding:9px 10px}.floating-notice-action{grid-column:2;justify-self:start}.floating-notice-close{grid-column:3;grid-row:1}}

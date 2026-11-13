@@ -13,4 +13,5 @@ import {htxTrades} from "./htx";
 import {mexcTrades} from "./mexc";
 import {whitebitTrades} from "./whitebit";
 import {cryptocomTrades} from "./cryptocom";
-export const tradeFactories:Record<ExchangeId,TradeFactory>={binance:binanceTrades,bybit:bybitTrades,okx:okxTrades,bitget:bitgetTrades,gate:gateTrades,kraken:krakenTrades,coinbase:coinbaseTrades,kucoin:kucoinTrades,bitfinex:bitfinexTrades,htx:htxTrades,mexc:mexcTrades,whitebit:whitebitTrades,cryptocom:cryptocomTrades};
+import {geminiTrades} from "./gemini";
+export const tradeFactories:Record<ExchangeId,TradeFactory>={binance:binanceTrades,bybit:bybitTrades,okx:okxTrades,bitget:bitgetTrades,gate:gateTrades,kraken:krakenTrades,coinbase:coinbaseTrades,kucoin:kucoinTrades,bitfinex:bitfinexTrades,htx:htxTrades,mexc:mexcTrades,whitebit:whitebitTrades,cryptocom:cryptocomTrades,gemini:geminiTrades};

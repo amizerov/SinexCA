@@ -7,6 +7,7 @@ import { useDrawingLevels } from "@/hooks/use-drawing-levels";
 import type { DrawingScope, HorizontalLevel } from "@/lib/drawings/types";
 import type { Candle } from "@/lib/market/types";
 import { price } from "@/lib/market/format";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 
 interface Props { ownerId:string; scope: DrawingScope; chart: RefObject<IChartApi | null>; series: RefObject<ISeriesApi<"Candlestick"> | null>; candles: Candle[] }
 const COLORS = ["#b4ed8b", "#63c8ff", "#f6c76e", "#f28c9b", "#b39aff"];
@@ -26,6 +27,8 @@ export function ChartDrawings({ ownerId, scope, chart, series, candles }: Props)
   useEffect(() => { latest.current = { drawing, selectedId, candles }; }, [drawing, selectedId, candles]);
   const selected = drawing.levels.find(level => level.id === selectedId);
   const enabled = drawing.ready && candles.length > 0;
+  const drawingWarning=drawing.status==="error"||drawing.status==="conflict"?drawing.error:undefined;
+  useFloatingNotice(`drawing:${ownerId}:${scope.exchange}:${scope.symbol}`,drawingWarning,{actionLabel:drawing.status==="conflict"?"Загрузить из базы":"Повторить",action:drawing.status==="conflict"?drawing.reload:drawing.status==="error"?drawing.retry:undefined});
 
   useEffect(() => {
     let frame = 0, stopped = false;
@@ -205,7 +208,6 @@ export function ChartDrawings({ ownerId, scope, chart, series, candles }: Props)
       <button className="icon-button" aria-label="Удалить уровень" title="Удалить уровень (Delete)" onClick={() => { drawing.commit(drawing.levels.filter(level => level.id !== selected.id)); setSelectedId(null); }}><Trash2 size={15} /></button>
       <button className="icon-button" aria-label="Закрыть настройки уровня" onClick={() => setSelectedId(null)}><X size={14} /></button>
     </div>}
-    {(dragging || drawing.status !== "saved") && <span className="drawing-save-status" role="status" data-save-status={drawing.status}>{dragging ? "Перенос уровня…" : drawing.status === "loading" ? "Загрузка уровней…" : drawing.status === "saving" ? "Сохранение…" : "Уровни не сохранены"}</span>}
-    {(drawing.status === "error" || drawing.status === "conflict") && <div className="drawing-notice" role="alert" onPointerDown={e => e.stopPropagation()}><span>{drawing.error}</span><button className="button" onClick={drawing.status === "conflict" ? drawing.reload : drawing.retry}>{drawing.status === "conflict" ? "Загрузить из базы" : "Повторить"}</button></div>}
+    {(dragging || drawing.status === "loading" || drawing.status === "saving") && <span className="drawing-save-status" role="status" data-save-status={drawing.status}>{dragging ? "Перенос уровня…" : drawing.status === "loading" ? "Загрузка уровней…" : "Сохранение…"}</span>}
   </div>;
 }

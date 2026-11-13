@@ -7,11 +7,13 @@ import type {useDemoOrders} from "@/hooks/use-demo-orders";
 import {EXCHANGES} from "@/lib/market/exchange-config";
 import {ATOMS,isOpen,orderNames,type DemoOrder} from "@/lib/paper/orders";
 import {paperAmount,paperDecimals,paperOrderStatus} from "@/lib/paper/account";
+import {useFloatingNotice} from "@/components/FloatingNotices";
 const number=(value:number)=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:12}).format(value);
 export function OrderDetailsDialog({order:initial,orders,close}:{order:DemoOrder;orders:ReturnType<typeof useDemoOrders>;close:()=>void}){
   const dialog=useRef<HTMLDialogElement>(null),floating=useDraggableDialog(dialog,"order"),[busy,setBusy]=useState(false),[error,setError]=useState(""),inFlight=useRef(false);
   const order=orders.data?.orders.find(o=>o.id===initial.id)??initial;
   const currency=order.side==="buy"?order.quote:order.base;
+  useFloatingNotice(`order-details:${order.id}`,error);
   function closeWindow(){floating.remember();close();}
   useEffect(()=>{
     const escape=(event:KeyboardEvent)=>{
@@ -42,7 +44,6 @@ export function OrderDetailsDialog({order:initial,orders,close}:{order:DemoOrder
         {metric("Создана",new Date(order.createdAt).toLocaleString("ru-RU"))}
       </dl>
       <p className="order-details-id" title={order.id}>ID · {order.id}</p>
-      {error&&<p className="account-error" role="alert">{error}</p>}
       {isOpen(order)&&<button type="button" className="button order-details-cancel" disabled={busy} onClick={()=>void cancel()}>{busy?"Отменяем…":"Отменить заявку"}</button>}
     </div>
   </dialog>,document.body);
