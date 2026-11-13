@@ -234,7 +234,7 @@ h1, h2, p { margin: 0; }
 .indicator-open {display:flex;align-items:center;gap:5px;font-size:10px;}.indicator-open b {font-size:8px;min-width:13px;border-radius:3px;background:#364b2b;color:#ceefb9;}
 @media(max-width:600px){.indicator-open>span {display:none;}.indicator-dialog {padding:18px;}}
 @media(max-width:1360px){.exchange-tabs{display:none;}.exchange-select{display:block;}}
-@media(max-width:650px){.help-link span{display:none;}.help-link{padding:7px;}}
+@media(max-width:650px){.help-link{padding:7px;}}
 
 /* Knowledge base */
 .kb-shell{position:fixed;inset:0;z-index:100;overflow-y:auto;overflow-x:hidden;background:#0b100e;color:var(--text);font-size:15px;scroll-behavior:smooth;}

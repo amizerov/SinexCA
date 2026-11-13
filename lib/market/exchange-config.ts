@@ -1,5 +1,5 @@
 import type { ExchangeId, TradingPair } from "./types";
-export const EXCHANGE_IDS = ["binance", "bybit", "okx", "bitget", "gate", "kraken", "coinbase", "kucoin", "bitfinex", "htx", "mexc", "whitebit", "cryptocom", "gemini"] as const;
+export const EXCHANGE_IDS = ["binance", "bybit", "okx", "bitget", "gate", "kraken", "coinbase", "kucoin", "bitfinex", "htx", "mexc", "whitebit", "cryptocom", "bingx"] as const;
 export const EXCHANGES: Record<ExchangeId, { name: string; quote: string; candleStream: boolean; docs: string }> = {
   binance: { name: "Binance", quote: "USDT", candleStream: true, docs: "https://developers.binance.com/docs/binance-spot-api-docs" },
   bybit: { name: "Bybit", quote: "USDT", candleStream: true, docs: "https://bybit-exchange.github.io/docs/v5/intro" },
@@ -14,7 +14,7 @@ export const EXCHANGES: Record<ExchangeId, { name: string; quote: string; candle
   mexc: { name: "MEXC", quote: "USDT", candleStream: true, docs: "https://www.mexc.com/api-docs/spot-v3/introduction" },
   whitebit: { name: "WhiteBIT", quote: "USDT", candleStream: true, docs: "https://docs.whitebit.com/" },
   cryptocom: { name: "Crypto.com", quote: "USDT", candleStream: true, docs: "https://exchange-developer.crypto.com/exchange/v1/" },
-  gemini: { name: "Gemini", quote: "USD", candleStream: false, docs: "https://developer.gemini.com/rest/market-data" },
+  bingx: { name: "BingX", quote: "USDT", candleStream: true, docs: "https://bingx-api.github.io/docs-v3/" },
 };
 export const PREFERRED_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "TRX", "LINK", "AVAX", "SUI", "LTC", "BCH", "DOT", "NEAR", "UNI", "APT", "TON", "PEPE", "AAVE", "SHIB", "ICP", "ETC", "ATOM", "FIL", "RENDER", "ARB", "OP"];
 export function choosePairs(pairs: TradingPair[]): TradingPair[] {
@@ -39,6 +39,6 @@ export function tradingUrl(exchange: ExchangeId, pair?: TradingPair) {
     case "mexc": return `https://www.mexc.com/exchange/${base}_${quote}`;
     case "whitebit": return `https://whitebit.com/trade/${base}_${quote}`;
     case "cryptocom": return `https://crypto.com/exchange/trade/${base}_${quote}`;
-    case "gemini": return `https://exchange.gemini.com/trade/${base}${quote}`;
+    case "bingx": return `https://bingx.com/en-us/spot/${base}${quote}`;
   }
 }

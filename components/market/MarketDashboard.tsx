@@ -129,7 +129,7 @@ export function MarketDashboard() {
         <select className="exchange-select" aria-label="Биржа" value={exchange} onChange={e => changeExchange(e.target.value as ExchangeId)}>{EXCHANGE_IDS.map(id => <option key={id} value={id}>{EXCHANGES[id].name}</option>)}</select>
       </div>
       <ThemeToggle />
-      <Link href="/help" className="help-link" title="Справка и обучение" aria-label="Открыть справку"><CircleHelp size={17}/><span>Справка</span></Link>
+      <Link href="/help" className="help-link" title="Справка и обучение" aria-label="Открыть справку"><CircleHelp size={17}/></Link>
       <AccountButton />
     </header>
     <div className="workspace">

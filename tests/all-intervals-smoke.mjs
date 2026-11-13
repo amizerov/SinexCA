@@ -2,7 +2,7 @@ import { exchangeTimeframes,EXCHANGE_INTERVALS } from "../lib/market/intervals.t
 import assert from "node:assert/strict";
 import { mkdir,writeFile } from "node:fs/promises";
 const baseURL=process.env.BASE_URL||"http://localhost:3002";
-const symbols={binance:"BTCUSDT",bybit:"BTCUSDT",okx:"BTC-USDT",bitget:"BTCUSDT",gate:"BTC_USDT",kraken:"XBTUSDT",coinbase:"BTC-USD",kucoin:"BTC-USDT",bitfinex:"tBTCUST",htx:"btcusdt",mexc:"BTCUSDT",whitebit:"BTC_USDT",cryptocom:"BTC_USDT",gemini:"btcusd"},report=[];
+const symbols={binance:"BTCUSDT",bybit:"BTCUSDT",okx:"BTC-USDT",bitget:"BTCUSDT",gate:"BTC_USDT",kraken:"XBTUSDT",coinbase:"BTC-USD",kucoin:"BTC-USDT",bitfinex:"tBTCUST",htx:"btcusdt",mexc:"BTCUSDT",whitebit:"BTC_USDT",cryptocom:"BTC_USDT",bingx:"BTC-USDT"},report=[];
 await Promise.all(Object.keys(EXCHANGE_INTERVALS).map(async exchange=>{
   for(const timeframe of exchangeTimeframes(exchange)){
     const query=new URLSearchParams({exchange,symbol:symbols[exchange],timeframe,limit:"3"});

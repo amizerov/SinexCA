@@ -34,7 +34,7 @@ export function subscribeTrades(exchange:ExchangeId,pairs:TradingPair[],options:
         if(stopped||socket!==ws)return;lastTransport=Date.now();
         queue=queue.then(async()=>{
           if(stopped||socket!==ws)return;let input:unknown=event.data;
-          if(input instanceof ArrayBuffer&&exchange==="htx")input=await new Response(new Blob([input]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+          if(input instanceof ArrayBuffer&&(exchange==="htx"||exchange==="bingx"))input=await new Response(new Blob([input]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
           if(typeof input==="string"){if(input==="pong"||input==="ping")return;input=JSON.parse(input);}
           if(stopped||socket!==ws)return;const envelope=record(input);
           if(envelope.event==="error"||envelope.type==="error"||envelope.success===false||(typeof envelope.code==="number"&&envelope.code!==0)||(envelope.error&&typeof envelope.error==="object")){ws.close();return;}

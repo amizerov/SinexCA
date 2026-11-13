@@ -1,6 +1,6 @@
 # Sinex broker
 
-Аналитика 14 спотовых бирж: Binance, Bybit, OKX, Bitget, Gate, Kraken, Coinbase, KuCoin, Bitfinex, HTX, MEXC, WhiteBIT, Crypto.com и Gemini. Каталоги включают все активные спотовые пары с выбором валюты котировки: USDT, USD, USDC, BTC, ETH и другие доступные на выбранной бирже. Реальные котировки, свечи и объёмы. WebSocket подключается только к выбранной паре, общий список обновляется через REST раз в минуту. Можно работать гостем или войти по email/паролю либо через Google, чтобы использовать свою разметку с разных устройств. Торговли и доступа к кошелькам нет.
+Аналитика 14 спотовых бирж: Binance, Bybit, OKX, Bitget, Gate, Kraken, Coinbase, KuCoin, Bitfinex, HTX, MEXC, WhiteBIT, Crypto.com и BingX. Каталоги включают все активные спотовые пары с выбором валюты котировки: USDT, USD, USDC, BTC, ETH и другие доступные на выбранной бирже. Реальные котировки, свечи и объёмы. WebSocket подключается только к выбранной паре, общий список обновляется через REST раз в минуту. Можно работать гостем или войти по email/паролю либо через Google, чтобы использовать свою разметку с разных устройств. Торговли и доступа к кошелькам нет.
 
 ## Валюта списка пар
 
@@ -16,9 +16,9 @@
 
 Проверки: `tests/quote-selection.test.ts`, `node tests/quote-selection-browser.mjs`, `node tests/quote-selection-real-browser.mjs`, `node --import tsx tests/quote-selection-live.mjs`. Последняя проверяет каталоги, фильтрацию, котировки, свечи и стаканы всех 14 бирж; отчёт — `.qa/quote-selection-live.json`. Старые настройки аккаунтов/браузера получают значения `quote=auto` и `selectedQuote=""` при чтении, без сброса остальных полей.
 
-## Gemini
+## BingX
 
-Публичная спотовая интеграция без ключей использует каталог `/v1/symbols`, общий price feed, точный тикер выбранной пары, REST-свечи `1m`/`5m`/`15m`/`30m`/`1h`/`6h`/`1d` и REST-стакан. Новый публичный WebSocket `wss://ws.gemini.com` передаёт сделки, живую цену и снимки 20 уровней стакана. Деривативы с суффиксом `perp` в каталог не попадают. Проверки: `tests/gemini.test.ts` и `node --import tsx tests/gemini-live.mjs`. Gemini может отвечать HTTP 451 в регионах, где площадка ограничивает доступ; приложение показывает существующую ошибку региональной недоступности.
+Публичная спотовая интеграция без ключей использует каталог `/openApi/spot/v1/common/symbols`, общий и точечный 24-часовой тикер, REST-свечи на 15 интервалах и REST-стакан. Публичный WebSocket `wss://open-api-ws.bingx.com/market` передаёт gzip-сообщения со сделками, свечами и снимками 20 уровней стакана; браузер распаковывает их через `DecompressionStream`. Проверки: `tests/bingx.test.ts` и `node --import tsx tests/bingx-live.mjs`.
 
 ## WhiteBIT и Crypto.com
 

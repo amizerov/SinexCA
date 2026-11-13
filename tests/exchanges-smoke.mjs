@@ -2,7 +2,7 @@ import { chromium } from "playwright-core";
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 const baseURL = process.env.BASE_URL || "http://127.0.0.1:3004";
-const ids = ["binance", "bybit", "okx", "bitget", "gate", "kraken", "coinbase", "kucoin", "bitfinex", "htx", "mexc", "whitebit", "cryptocom", "gemini"];
+const ids = ["binance", "bybit", "okx", "bitget", "gate", "kraken", "coinbase", "kucoin", "bitfinex", "htx", "mexc", "whitebit", "cryptocom", "bingx"];
 const targets = process.argv.length > 2 ? process.argv.slice(2) : ids;
 const report = [];
 async function chooseExchange(page, id) {

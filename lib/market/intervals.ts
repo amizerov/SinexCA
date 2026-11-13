@@ -6,7 +6,7 @@ const binance=native(Object.fromEntries(["1s","1m","3m","5m","15m","30m","1h","2
 export const EXCHANGE_INTERVALS:Record<ExchangeId,Intervals>={
   whitebit:Object.fromEntries(["1s","10s","30s","1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w","1M"].map(tf=>[tf,{rest:tf,ws:String(tf==="1M"?2592000:intervalSeconds(tf as Timeframe))}])),
   cryptocom:native({"1m":"1m","5m":"5m","15m":"15m","30m":"30m","1h":"1h","2h":"2h","4h":"4h","12h":"12h","1d":"1D","1w":"7D","14d":"14D","1M":"1M"}),
-  gemini:{"1m":{rest:"1m"},"5m":{rest:"5m"},"15m":{rest:"15m"},"30m":{rest:"30m"},"1h":{rest:"1h"},"6h":{rest:"6h"},"1d":{rest:"1d"}},
+  bingx:{"1m":{rest:"1m",ws:"1min"},"3m":{rest:"3m",ws:"3min"},"5m":{rest:"5m",ws:"5min"},"15m":{rest:"15m",ws:"15min"},"30m":{rest:"30m",ws:"30min"},"1h":{rest:"1h",ws:"60min"},"2h":{rest:"2h",ws:"2hour"},"4h":{rest:"4h",ws:"4hour"},"6h":{rest:"6h",ws:"6hour"},"8h":{rest:"8h",ws:"8hour"},"12h":{rest:"12h",ws:"12hour"},"1d":{rest:"1d",ws:"1day"},"3d":{rest:"3d",ws:"3day"},"1w":{rest:"1w",ws:"1week"},"1M":{rest:"1M",ws:"1mon"}},
   binance,
   bybit:native({"1m":"1","3m":"3","5m":"5","15m":"15","30m":"30","1h":"60","2h":"120","4h":"240","6h":"360","12h":"720","1d":"D","1w":"W","1M":"M"}),
   okx:native({"1s":"1s","1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m","1h":"1H","2h":"2H","4h":"4H","6h":"6Hutc","12h":"12Hutc","1d":"1Dutc","2d":"2Dutc","3d":"3Dutc","1w":"1Wutc","1M":"1Mutc","3M":"3Mutc"}),

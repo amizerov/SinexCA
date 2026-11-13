@@ -87,7 +87,7 @@ export function streamSettings(exchange: ExchangeId, { symbol, timeframe, wsSymb
     case "gate": return { url: "wss://api.gateio.ws/ws/v4/", message: { time: Math.floor(Date.now() / 1000), channel: "spot.candlesticks", event: "subscribe", payload: [bar, symbol] } };
     case "kraken": return { url: "wss://ws.kraken.com/v2", message: { method: "subscribe", params: { channel: "ohlc", symbol: [wsSymbol], interval: minutes[timeframe] } } };
     case "coinbase": return { url: "wss://ws-feed.exchange.coinbase.com", message: { type: "subscribe", product_ids: [symbol], channels: ["ticker", "heartbeat"] } };
-    case "gemini": return { url: "wss://ws.gemini.com", message: { id: "sinex-chart", method: "SUBSCRIBE", params: [`${symbol.toLowerCase()}@trade`] } };
+    case "bingx": return {url:"wss://open-api-ws.bingx.com/market",message:{id:crypto.randomUUID(),reqType:"sub",dataType:`${symbol}@kline_${bar}`},reply(input){const event=envelope.parse(input);return event.ping?{pong:event.ping,time:event.time}:undefined;}};
     default: throw new Error("Используйте нативный адаптер Binance");
   }
 }
@@ -100,9 +100,11 @@ export function decodeForeignStream(exchange: ExchangeId, input: unknown, option
     if (x.type === "ticker" && x.product_id === symbol) return { price: finiteNumber.pipe(z.number().positive()).parse(x.price) };
     return {};
   }
-  if(exchange==="gemini"){
-    if(String(x.s).toLowerCase()!==symbol.toLowerCase())return {};
-    return {price:finiteNumber.pipe(z.number().positive()).parse(x.p)};
+  if(exchange==="bingx"){
+    if(x.dataType!==`${symbol}@kline_${wsInterval(exchange,timeframe)}`)return {};
+    const data=envelope.parse(x.data),k=envelope.parse(data.K);
+    if(data.s!==symbol)return {};
+    rows=[[k.t,k.o,k.h,k.l,k.c,k.v]];
   }
   if (exchange === "bybit") {
     if (x.topic !== `kline.${wsInterval(exchange,timeframe)}.${symbol}`) return {};
@@ -126,7 +128,7 @@ export function decodeForeignStream(exchange: ExchangeId, input: unknown, option
   return { candle: normalizeCandles(rows).at(-1) };
 }
 export function subscribeMarketStream(exchange: ExchangeId, options: CandleStreamOptions): () => void {
-  if(exchange!=="coinbase"&&exchange!=="gemini"&&!wsInterval(exchange,options.timeframe)){options.onStatus("offline");return()=>{};}
+  if(exchange!=="coinbase"&&!wsInterval(exchange,options.timeframe)){options.onStatus("offline");return()=>{};}
   const health=new StreamHealth(exchange);let status:StreamStatus="connecting",openedAt=0;
   const emit=(next:StreamStatus)=>{if(next!==status){status=next;options.onStatus(next);}};
   options.onStatus("connecting");
@@ -148,10 +150,11 @@ function subscribeRawMarketStream(exchange: ExchangeId, options: CandleStreamOpt
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let subscriptionTimer: ReturnType<typeof setTimeout> | undefined;
+  let queue=Promise.resolve();
   function connect() {
     if (stopped) return;
     options.onStatus(attempts || hadData ? "reconnecting" : "connecting");
-    const ws = new WebSocket(settings.url); socket = ws;
+    const ws = new WebSocket(settings.url); socket = ws;ws.binaryType="arraybuffer";
     const arm = () => { clearTimeout(watchdog); watchdog = setTimeout(() => ws.close(), 90_000); };
     arm();
     ws.onopen = () => {
@@ -160,12 +163,14 @@ function subscribeRawMarketStream(exchange: ExchangeId, options: CandleStreamOpt
       subscriptionTimer=setTimeout(()=>{if(!stopped&&socket===ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(settings.message));},settings.subscribeDelayMs||0);
       if (settings.ping) heartbeat = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(settings.ping!); }, 15000);
     };
-    ws.onmessage = event => {
-      if (stopped) return;
-      options.onConnection?.("message");
-      arm();
+    ws.onmessage = event => {queue=queue.then(async()=>{
+      if (stopped||socket!==ws) return;
+      options.onConnection?.("message");arm();
       try {
-        const input = JSON.parse(String(event.data));
+        let text:string;
+        if(event.data instanceof ArrayBuffer){const stream=new Blob([event.data]).stream();text=await new Response(exchange==="bingx"?stream.pipeThrough(new DecompressionStream("gzip")):stream).text();}
+        else text=String(event.data);
+        const input = JSON.parse(text);
         if(input.error||typeof input.code==="number"&&input.code!==0){ws.close();return;}
         const reply=settings.reply?.(input);if(reply!==undefined&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(reply));
         if (input.event === "error" || input.success === false || input.type === "error") { ws.close(); return; }
@@ -177,7 +182,7 @@ function subscribeRawMarketStream(exchange: ExchangeId, options: CandleStreamOpt
         if (candle) options.onCandle(candle);
         if (price !== undefined) options.onPrice?.(price);
       } catch { /* Control messages and invalid market payloads never enter chart state. */ }
-    };
+    }).catch(()=>{});};
     ws.onerror = () => {ws.onerror=null;ws.close();};
     ws.onclose = () => {
       options.onConnection?.("close");
