@@ -54,3 +54,15 @@ test("legacy global book step upgrades without losing layout and no longer block
     book.priceStep=0;accounts.db.prepare("UPDATE private_workspace_settings SET settings=? WHERE owner_id=?").run(JSON.stringify({...DEFAULT_WORKSPACE,orderBookSettings:book}),owner);assert.deepEqual(store.read(owner).settings!.orderBookSettings.priceSteps,{});store.save(owner,{selected:"SOL"});
   }finally{accounts.close();}
 });
+test("history and chart ranges persist in the existing settings document and remain owner scoped",()=>{
+  const accounts=new AccountStore(":memory:",false);
+  try{
+    const a=accounts.createGuest().session.ownerId,b=accounts.createGuest().session.ownerId,store=new WorkspaceStore(accounts.db);
+    const recentPairs=[{exchange:"binance",marketType:"spot",symbol:"ETHUSDT",baseAsset:"ETH",quoteAsset:"USDT"}];
+    const chartViews={"binance:spot:ETHUSDT:1h":{from:100,to:200}};
+    store.save(a,{recentPairs,chartViews});store.save(a,{selected:"ETH"});
+    assert.deepEqual(store.read(a).settings!.recentPairs,recentPairs);assert.deepEqual(store.read(a).settings!.chartViews,chartViews);
+    assert.equal(store.read(b).settings,null);
+    store.save(a,{recentPairs:[]});assert.deepEqual(store.read(a).settings!.recentPairs,[]);assert.deepEqual(store.read(a).settings!.chartViews,chartViews);
+  }finally{accounts.close();}
+});

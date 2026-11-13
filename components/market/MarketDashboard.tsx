@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState,useCallback } from "react";
+import { useEffect, useMemo, useState,useCallback,useRef } from "react";
 import Link from "next/link";
 import { RefreshCw, ListOrdered,PanelRight,Activity,CircleHelp } from "lucide-react";
 import { useMarketResource } from "@/hooks/use-market-resource";
@@ -31,8 +31,14 @@ import {useChartTrades} from "@/hooks/use-chart-trades";
 import {useDockViewport,useMobileViewport} from "@/hooks/use-order-book-dock";
 import {ThemeToggle} from "@/components/ThemeToggle";
 
+import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
+import {recordRecentPair} from "@/lib/ui/recent-pairs";
+import {favoriteKey} from "@/lib/ui/market-panel-settings";
+
 export function MarketDashboard() {
   const {session}=useAccount();
+  const workspacePreferences=useWorkspacePreferences();
+  const lastViewed=useRef("");
   const orders=useDemoOrders();
   const wide=useDockViewport();
   const mobile=useMobileViewport();
@@ -67,6 +73,17 @@ export function MarketDashboard() {
   const orderedPairs=usePairOrder(exchange,pairs.data,tickerMap,effectiveSort,!listLoading);
   const ticker = pair ? tickerMap.get(pair.symbol) : undefined;
   const market = useMarketCandles(exchange, pair, timeframe,hasIndicators(preferences.settings));
+  useEffect(()=>{
+    if(!workspacePreferences.ready||!pair||market.loading||!market.candles.length)return;
+    const key=workspacePreferences.identity?.ownerId+":"+favoriteKey(pair);
+    if(lastViewed.current===key)return;
+    lastViewed.current=key;
+    workspacePreferences.update({recentPairs:recordRecentPair(workspacePreferences.settings.recentPairs,pair)});
+  },[pair,market.loading,market.candles.length,workspacePreferences]);
+  function openSavedPair(saved:TradingPair){
+    setSearch("");
+    updateWorkspace({exchange:saved.exchange,quote:saved.quoteAsset,selected:saved.baseAsset,selectedQuote:saved.quoteAsset,timeframe:nearestTimeframe(saved.exchange,timeframe)});
+  }
   const list = useMemo(() => {
     return orderedPairs.filter(p => `${p.baseAsset} ${p.symbol} ${coinNames[p.baseAsset] || ""}`.toLowerCase().includes(search.toLowerCase().trim()));
   }, [orderedPairs, search]);
@@ -99,7 +116,7 @@ export function MarketDashboard() {
         search={search} setSearch={setSearch} quote={listQuote} currencies={currencies} catalogReady={!!catalog.data}
         setQuote={value=>updateWorkspace({quote:value,selected:pair?.baseAsset||selected,selectedQuote:value==="all"?pair?.quoteAsset||selectedQuote:value})}
         sort={effectiveSort} setSort={setSort} statsReady={statsReady} volumeAvailable={volumeAvailable} changeAvailable={changeAvailable}
-        loading={listLoading} error={pairs.error} refresh={pairs.refresh} select={setSelected}/>:undefined;
+        loading={listLoading} error={pairs.error} refresh={pairs.refresh} select={setSelected} openSavedPair={openSavedPair}/>:undefined;
   const trades=showTrades?<TradesPanel inColumn={tradeColumn} key={`trades:${session?.ownerId??"guest"}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} trades={pair?tickers.trades:[]} status={pair?tickers.status:"connecting"} connection={pair?tickers.connection:undefined} demo={orders.data} error={orders.error}/>:undefined;
   const tapeSide=tradesSide==="auto"?(marketPanel.mode==="left"?"left":"right"):tradesSide;
   return <PanelDockProvider><div className="app-shell">

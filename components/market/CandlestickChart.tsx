@@ -20,6 +20,8 @@ import {ExecutionTooltip} from "./ExecutionTooltip";
 import {CURRENT_PRICE_COLOR,orderColor,orderLevels} from "@/lib/paper/order-levels";
 import {DemoOrderMarkers} from "./DemoOrderMarkers";
 
+import {useChartViewport} from "@/hooks/use-chart-viewport";
+
 interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string; retry: () => void }
 export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error, retry }: Props) {
   const {session}=useAccount();
@@ -30,7 +32,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   const volume = useRef<ISeriesApi<"Histogram"> | null>(null);
   const tradeLine=useRef<IPriceLine|null>(null);
   const previous = useRef<{ key: string; candles: Candle[] } | null>(null);
-  const needsViewport=useRef(true);
+
   const [expanded, setExpanded] = useState(false);
   const [showTrades,setShowTrades]=useState(true);
   const [context,setContext]=useState<{x:number;y:number;price:number}>();
@@ -71,7 +73,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     chart.current = instance;
     const syncTheme=()=>{const next=colors();instance.applyOptions({layout:{background:{type:ColorType.Solid,color:next.background},textColor:next.text},grid:{vertLines:{color:next.grid},horzLines:{color:next.grid}},crosshair:{vertLine:{color:next.crosshair,labelBackgroundColor:next.crosshairLabel},horzLine:{color:next.crosshair,labelBackgroundColor:next.crosshairLabel}},rightPriceScale:{borderColor:next.border},timeScale:{borderColor:next.border}});};
     window.addEventListener("sinex:theme-change",syncTheme);
-    needsViewport.current=true;
+
     series.current = instance.addSeries(CandlestickSeries, { upColor: "#9bd67a", downColor: "#ec7775", borderVisible: false, wickUpColor: "#9bd67a", wickDownColor: "#ec7775", priceLineColor:CURRENT_PRICE_COLOR,priceLineVisible:false,lastValueVisible:false });
     volume.current = instance.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume", lastValueVisible: false, priceLineVisible: false }, 1);
     instance.panes()[0].setStretchFactor(5);
@@ -146,12 +148,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
       localization:{timeFormatter:formatters.timeFormatter},
     });
   },[timeframe,timeZone]);
-  useEffect(()=>{
-    if(!candles.length||!needsViewport.current)return;
-    // Set the range after candle and indicator series have all rebuilt the time scale.
-    const frame=requestAnimationFrame(()=>{const instance=chart.current;if(!instance)return;instance.priceScale("right",0).applyOptions({autoScale:true});instance.timeScale().setVisibleLogicalRange({from:Math.max(0,candles.length-95),to:candles.length+5});needsViewport.current=false;container.current?.dispatchEvent(new Event("sinex:chart-layout",{bubbles:true}));});
-    return()=>cancelAnimationFrame(frame);
-  },[candles]);
+  useChartViewport(chart,candles,exchange+":spot:"+symbol+":"+timeframe);
 
   const executions=useExecutionMarkers(chart,series,fills,candles,exchange,symbol,timeframe,positions,showTrades);
   const basisChange=executions.breakEven&&tickPrice!==undefined?(tickPrice/executions.breakEven-1)*100:undefined;

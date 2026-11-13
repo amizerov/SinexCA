@@ -17,7 +17,7 @@ function bucket(identity:WorkspaceIdentity){
   if(!identity.userId){try{const migration="sinex:guest-panels:v1";if(!localStorage.getItem(migration)){settings=normalizeWorkspace({...settings,orderBookOpen:true,marketsOpen:true,tradesOpen:true,tradesDocked:true,tradesTab:"all"});localStorage.setItem(migration,"1");migratedGuestPanels=true;}}catch{}}
   value={identity,key,snapshot:{settings,ready:!identity.userId,error:""},pending,active:false,cached};buckets.set(key,value);if(migratedGuestPanels)local(value);return value;
 }
-function local(value:Bucket){try{localStorage.setItem(value.key,JSON.stringify({settings:value.snapshot.settings,pending:value.pending}));}catch{/* The live state and server save still work when browser storage is disabled. */}}
+function local(value:Bucket){try{localStorage.setItem(value.key,JSON.stringify({version:2,settings:value.snapshot.settings,pending:value.pending}));}catch{/* The live state and server save still work when browser storage is disabled. */}}
 function publish(value:Bucket,settings:WorkspaceSettings,ready=value.snapshot.ready,error=""){value.snapshot={settings,ready,error};emit();}
 function schedule(value:Bucket,delay=300){clearTimeout(value.timer);if(value.active&&value.identity.userId&&value.snapshot.ready&&Object.keys(value.pending).length)value.timer=setTimeout(()=>void save(value).catch(()=>{}),delay);}
 async function request(value:Bucket,patch?:WorkspacePatch){

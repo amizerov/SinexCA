@@ -12,16 +12,18 @@ import {useOrderBookDock as useDockWidth} from "@/hooks/use-order-book-dock";
 import {PairRow} from "./PairRow";
 import {usePanelDock} from "./PanelDock";
 import {useClientReady} from "@/hooks/use-client-ready";
+import {SavedMarkets} from "./SavedMarkets";
 interface Props {
   exchange:ExchangeId;pairs:TradingPair[];total?:number;selected?:string;tickers:Map<string,Ticker>;ticks?:Map<string,TradeTick>;
   search:string;setSearch:(value:string)=>void;quote:string;currencies:string[];catalogReady:boolean;setQuote:(quote:string)=>void;
   sort:"volume"|"change"|"name";setSort:(value:"volume"|"change"|"name")=>void;statsReady:boolean;volumeAvailable:boolean;changeAvailable:boolean;
-  loading:boolean;error?:string;refresh:()=>void;select:(pair:TradingPair)=>void;inColumn?:boolean;
+  loading:boolean;error?:string;refresh:()=>void;select:(pair:TradingPair)=>void;openSavedPair:(pair:TradingPair)=>void;inColumn?:boolean;
 }
 export function MarketsPanel(props:Props){
   const {exchange,pairs,total,selected,tickers,ticks,search,setSearch,quote,currencies,catalogReady,setQuote,sort,setSort,statsReady,volumeAvailable,changeAvailable,loading,error,refresh,select}=props;
   const preferences=useWorkspacePreferences(),settings=preferences.settings.marketPanel,floating=useFloatingWindow("markets");
   const clientReady=useClientReady();
+  const [view,setView]=useState<"all"|"favorites"|"recent">("all");
   const update=preferences.update,dock=usePanelDock();
   const save=(patch:Partial<MarketPanelSettings>)=>update({marketPanel:{...settings,...patch}});
   const width=useDockWidth(settings.width,value=>save({width:value}),280,480),isFloating=settings.mode==="floating",right=settings.mode==="right";
@@ -44,7 +46,8 @@ export function MarketsPanel(props:Props){
       <button ref={menuButton} aria-label="Расположение списка пар" aria-expanded={!!menuPosition} onClick={openMenu}><MoreHorizontal size={15}/></button>
       <button aria-label="Скрыть список пар" title="Скрыть; открыть снова кнопкой «Рынки» над графиком" onClick={close}><X size={14}/></button>
     </header>
-    <div className="sidebar-filters markets-filters">
+    <div className="saved-market-tabs" role="group" aria-label="Списки пар">{([["all","Все"],["favorites","Избранное"],["recent","История"]] as const).map(([id,label])=><button key={id} aria-pressed={view===id} onClick={()=>setView(id)}>{label}</button>)}</div>
+    {view!=="all"?<SavedMarkets mode={view} open={props.openSavedPair}/>:<><div className="sidebar-filters markets-filters">
       <label className="search-field"><Search size={13}/><input placeholder="Найти пару" aria-label="Поиск торговой пары" value={search} onChange={event=>setSearch(event.target.value)}/>{search&&<button onClick={()=>setSearch("")} aria-label="Очистить поиск"><X size={12}/></button>}</label>
       <button className={`markets-favorites-filter ${settings.favoritesOnly?"selected":""}`} aria-label="Только избранные" aria-pressed={settings.favoritesOnly} title="Только избранные пары выбранной биржи и валюты" onClick={()=>save({favoritesOnly:!settings.favoritesOnly})}><Star size={14} fill={settings.favoritesOnly?"currentColor":"none"}/></button>
     </div>
@@ -59,6 +62,7 @@ export function MarketsPanel(props:Props){
       {visible.map(pair=><PairRow key={pair.symbol} pair={pair} ticker={tickers.get(pair.symbol)} livePrice={ticks?.get(pair.symbol)?.price} active={selected===pair.symbol} select={select} favorite={favorites.has(favoriteKey(pair))} toggleFavorite={toggleFavorite}/>)}
       {!loading&&!visible.length&&<div className="empty-list">{error?<><p>{error}</p><button className="button" onClick={refresh}>Повторить</button></>:settings.favoritesOnly?"Нет избранных пар для этой валюты. Добавьте их звёздочкой в общем списке.":"Пары не найдены. Попробуйте другой запрос."}</div>}
     </div>
+    </>}
     {isFloating?(["n","s","e","w","ne","nw","se","sw"] as const).map(edge=><div key={edge} className={`book-resize book-resize-${edge}`} onPointerDown={event=>floating.start(event,edge)} {...(edge==="se"?{role:"button",tabIndex:0,"aria-label":"Изменить размер списка пар",onKeyDown:(event:KeyboardEvent<HTMLElement>)=>floating.key(event,true)}:{"aria-hidden":true})}/> )
       :!props.inColumn&&<div className={`markets-dock-resize ${right?"on-left":"on-right"}`} role="separator" tabIndex={0} aria-label="Ширина списка пар" aria-orientation="vertical" aria-valuenow={width.width} aria-valuemin={280} aria-valuemax={480} onPointerDown={width.start} onPointerMove={event=>width.move(event,right)} onPointerUp={width.end} onPointerCancel={width.end} onLostPointerCapture={width.end} onKeyDown={event=>width.key(event,right)}/>}
   </aside>;
