@@ -9,8 +9,8 @@ export const mexc = cachedAdapter({
   id: "mexc",
   getPairs: async () => extraPairs("mexc", await request("/api/v3/exchangeInfo"),null),
   getTickers: async symbols => extraTickers("mexc", await request("/api/v3/ticker/24hr"), symbols),
-  getCandles: async ({ symbol, timeframe, limit }) => {
-    let candles:Candle[]=[],endTime:string|undefined;
+  getCandles: async ({ symbol, timeframe, limit, endTime:before }) => {
+    let candles:Candle[]=[],endTime:string|undefined=before===undefined?undefined:String(before*1000);
     // MEXC documents a maximum of 500 candles per response; paginate by UTC end time.
     for(let page=0;page<Math.ceil(limit/500)+1&&candles.length<limit;page++){
       const size=Math.min(500,limit-candles.length);

@@ -10,8 +10,8 @@ export const kucoin = cachedAdapter({
   id: "kucoin",
   getPairs: async () => extraPairs("kucoin", await request("/api/v2/symbols"),null),
   getTickers: async symbols => extraTickers("kucoin", await request("/api/v1/market/allTickers"), symbols),
-  getCandles: async ({ symbol, timeframe, limit }) => {
-    const endAt = Math.floor(Date.now() / 1000);
+  getCandles: async ({ symbol, timeframe, limit, endTime }) => {
+    const endAt = endTime??Math.floor(Date.now() / 1000);
     return extraCandles("kucoin", await request("/api/v1/market/candles", { symbol, type: restInterval("kucoin",timeframe), startAt: String(shiftInterval(endAt,timeframe,-limit-1)), endAt: String(endAt) })).slice(-limit);
   },
 });

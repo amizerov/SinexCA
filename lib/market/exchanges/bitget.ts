@@ -9,9 +9,9 @@ export const bitget = cachedAdapter({
   id: "bitget",
   getPairs: async () => foreignPairs("bitget", await request("/api/v2/spot/public/symbols"),null),
   getTickers: async symbols => foreignTickers("bitget", await request("/api/v2/spot/market/tickers"), symbols),
-  getCandles: async ({ symbol, timeframe, limit }) => {
+  getCandles: async ({ symbol, timeframe, limit, endTime:before }) => {
     const granularity = restInterval("bitget",timeframe);
-    let candles: Candle[] = [], endTime = String(Date.now());
+    let candles: Candle[] = [], endTime = String(before===undefined?Date.now():before*1000);
     for (let page = 0; page < Math.ceil(limit / 100) + 2 && candles.length < limit; page++) {
       const batch = foreignCandles("bitget", await request("/api/v2/spot/market/history-candles", { symbol, granularity, endTime, limit: String(Math.min(200, limit - candles.length)) }));
       if (!batch.length) break;
@@ -19,6 +19,7 @@ export const bitget = cachedAdapter({
       candles = mergeCandles(candles, batch, limit + 300); endTime = next;
     }
     // Historical endpoint excludes the in-progress candle.
+    if(before!==undefined&&before<Math.floor(Date.now()/1000))return candles.slice(-limit);
     return mergeCandles(candles, foreignCandles("bitget", await request("/api/v2/spot/market/candles", { symbol, granularity, limit: "2" })), limit);
   },
 });

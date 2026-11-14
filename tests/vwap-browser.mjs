@@ -1,0 +1,41 @@
+import {chromium} from "playwright-core";
+import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
+const browser=await chromium.launch({channel:"chrome",headless:true}),base=process.env.BASE_URL||"http://127.0.0.1:3017";
+try{
+  const context=await browser.newContext({viewport:{width:1600,height:1000}}),errors=[],sockets=new Map(),day=Math.floor(Date.now()/86400000)*86400;
+  const count=Math.max(2,Math.floor((Date.now()/1000-day)/60)+1);
+  const make=symbol=>Array.from({length:count},(_,i)=>({time:day+i*60,open:(symbol==="ETHUSDT"?100:10)+i*.01,high:(symbol==="ETHUSDT"?100:10)+i*.01,low:(symbol==="ETHUSDT"?100:10)+i*.01,close:(symbol==="ETHUSDT"?100:10)+i*.01,volume:1}));
+  const expected=symbol=>make(symbol).reduce((sum,c)=>sum+c.close,0)/count;
+  await context.routeWebSocket(/wss:\/\//,socket=>{if(socket.url().includes("@kline_"))sockets.set(socket.url(),socket);else socket.close();});
+  await context.route("**/api/market/**",route=>{
+    const url=new URL(route.request().url()),exchange=url.searchParams.get("exchange")||"binance",symbol=url.searchParams.get("symbol")||"BTCUSDT";
+    const data=url.pathname.endsWith("/vwap-history")?{sessionStart:day,candles:make(symbol),complete:true}:url.pathname.endsWith("/pairs")?["BTC","ETH"].map(baseAsset=>({exchange,marketType:"spot",symbol:`${baseAsset}USDT`,baseAsset,quoteAsset:"USDT"})):url.pathname.endsWith("/candles")?make(symbol).slice(-Number(url.searchParams.get("limit")||500)):url.pathname.endsWith("/orderbook")?{exchange,symbol,bids:[{price:10,quantity:2}],asks:[{price:11,quantity:3}],receivedAt:Date.now(),exchangeTime:null}:[];
+    return route.fulfill({json:{data}});
+  });
+  await context.request.get(`${base}/api/auth/session`);const page=await context.newPage();page.on("pageerror",e=>errors.push(e.message));await page.goto(base);
+  await page.locator(".chart-caption").filter({hasText:`${Math.min(count,500)} свечей`}).waitFor();await page.locator(".timeframe-select").selectOption("1m",{force:true});
+  const open=async()=>{await page.getByRole("button",{name:"Индикаторы",exact:true}).click();};
+  await open();await page.getByRole("tab",{name:"Каталог",exact:true}).click();await page.getByLabel("Поиск индикатора").fill("VWAP");
+  await page.getByRole("listitem").filter({hasText:"VWAP — средняя цена по объёму"}).getByRole("button",{name:"Добавить",exact:true}).click();
+  await page.getByLabel("Толщина VWAP",{exact:true}).selectOption("3");await page.getByLabel("Цвет VWAP",{exact:true}).fill("#138f89");await page.getByRole("button",{name:"Применить",exact:true}).click();
+  const value=()=>page.locator("[data-vwap-value]");await page.waitForFunction(expected=>Math.abs(Number(document.querySelector("[data-vwap-value]")?.getAttribute("data-vwap-value"))-expected)<1e-8,expected("BTCUSDT"));
+  const current=make("BTCUSDT").at(-1),changed={...current,high:41,low:9,close:40,volume:7};
+  const socket=[...sockets.entries()].find(([url])=>url.includes("btcusdt@kline_1m"))?.[1];assert.ok(socket);
+  const event={e:"kline",s:"BTCUSDT",k:{t:current.time*1000,i:"1m",o:String(current.open),h:"41",l:"9",c:"40",v:"7"}};
+  const target=(make("BTCUSDT").slice(0,-1).reduce((sum,c)=>sum+c.close,0)+(changed.high+changed.low+changed.close)/3*7)/(count-1+7);
+  socket.send(JSON.stringify(event));await page.waitForFunction(target=>Math.abs(Number(document.querySelector("[data-vwap-value]")?.getAttribute("data-vwap-value"))-target)<1e-8,target);
+  socket.send(JSON.stringify(event));await page.waitForTimeout(100);assert.ok(Math.abs(Number(await value().getAttribute("data-vwap-value"))-target)<1e-8);
+  await page.locator(".pair-row").filter({hasText:"ETH/USDT"}).click();await page.waitForFunction(expected=>Math.abs(Number(document.querySelector("[data-vwap-value]")?.getAttribute("data-vwap-value"))-expected)<1e-8,expected("ETHUSDT"));
+  await page.reload();await value().waitFor();await open();assert.equal(await page.getByLabel("Толщина VWAP",{exact:true}).inputValue(),"3");assert.equal(await page.getByLabel("Цвет VWAP",{exact:true}).inputValue(),"#138f89");await page.getByRole("button",{name:"Закрыть индикаторы",exact:true}).click();
+  const manager=()=>page.getByRole("dialog",{name:"Управление макетами",exact:true});await page.locator(".current-layout").click();await manager().getByRole("button",{name:"Сохранить как…",exact:true}).click();await page.getByLabel("Название макета",{exact:true}).fill("VWAP");await page.getByRole("button",{name:"Создать",exact:true}).click();await manager().getByRole("button",{name:"Закрыть",exact:true}).click();
+  await page.locator(".current-layout").click();await manager().getByRole("button",{name:"Основной",exact:true}).click();await value().waitFor({state:"detached"});
+  await page.locator(".current-layout").click();await manager().getByRole("button",{name:"VWAP",exact:true}).click();await page.waitForFunction(()=>Number(document.querySelector("[data-vwap-value]")?.getAttribute("data-vwap-value"))>0);
+  await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/vwap-light.png",fullPage:true});await page.getByRole("button",{name:"Переключить светлую и тёмную тему",exact:true}).click();await page.screenshot({path:".qa/vwap-dark.png",fullPage:true});
+  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await open();await page.screenshot({path:".qa/vwap-mobile.png",fullPage:true});await page.getByRole("button",{name:"Закрыть индикаторы",exact:true}).click();await page.setViewportSize({width:1600,height:1000});
+  await page.locator(".timeframe-select").selectOption("1d",{force:true});await page.getByRole("alert").filter({hasText:"только на внутридневных"}).waitFor();assert.equal(await value().getAttribute("data-vwap-value"),"");
+  await page.locator(".timeframe-select").selectOption("1m",{force:true});await page.waitForFunction(()=>Number(document.querySelector("[data-vwap-value]")?.getAttribute("data-vwap-value"))>0);
+  await page.getByRole("button",{name:"Скрыть VWAP",exact:true}).click();await value().waitFor({state:"detached"});await open();await page.getByLabel("Показывать VWAP",{exact:true}).check();await page.getByRole("button",{name:"Применить",exact:true}).click();await value().waitFor();
+  await page.getByRole("button",{name:"Удалить VWAP с графика",exact:true}).click();await value().waitFor({state:"detached"});assert.deepEqual(errors,[]);
+  console.log("PASS VWAP: catalog, full-session calculation, duplicate candle replacement, pair switch, persisted width/color, themes, intraday guard, hide/delete");
+}finally{await browser.close();}

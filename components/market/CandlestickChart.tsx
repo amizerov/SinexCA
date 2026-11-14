@@ -23,6 +23,10 @@ import {useFloatingNotice} from "@/components/FloatingNotices";
 
 import {useChartViewport} from "@/hooks/use-chart-viewport";
 
+import {useDailyVwap} from "@/hooks/use-daily-vwap";
+import {useVwapSeries} from "@/hooks/use-vwap-series";
+import {VWAP_DESCRIPTION} from "@/lib/indicators/vwap";
+
 interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
 export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
   const {session}=useAccount();
@@ -44,7 +48,11 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   const showVolume=preferences.settings.volume;
   const [indicatorDialog,setIndicatorDialog]=useState(false);
   const indicatorNames=[...preferences.settings.ema.filter(line=>line.enabled).map(line=>`EMA ${line.period}`),...preferences.settings.sma.enabled?[`SMA ${preferences.settings.sma.period}`]:[],...preferences.settings.rsi.enabled?[`RSI ${preferences.settings.rsi.period}`]:[]];
+  if(preferences.settings.vwap.enabled)indicatorNames.push("VWAP");
   const count=indicatorNames.length;
+  const vwap=useDailyVwap(exchange,symbol,timeframe,preferences.settings.vwap.enabled&&candles.length>0,history);
+  useVwapSeries(chart,vwap.history,candles,timeframe,preferences.settings.vwap);
+  useFloatingNotice(`vwap-history:${exchange}:${symbol}`,vwap.warning,{actionLabel:"Повторить",action:vwap.warning?vwap.refresh:undefined});
   const [hovered, setHovered] = useState<{ exchangeName: string; symbol: string; timeframe: Timeframe; candle: Candle }>();
   const datasetRef = useRef({ candles, exchangeName, symbol, timeframe });
   useEffect(() => { datasetRef.current = { candles, exchangeName, symbol, timeframe }; }, [candles, exchangeName, symbol, timeframe]);
@@ -160,6 +168,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     <div className="chart-tools">
     <div className="ohlc"><span>O <b>{price(legend?.open)}</b></span><span>H <b>{price(legend?.high)}</b></span><span>L <b>{price(legend?.low)}</b></span><span>C <b className={legend && legend.close >= legend.open ? "positive" : "negative"}>{price(legend?.close)}</b></span><span className="ohlc-volume">Объём <b>{compact(legend?.volume)}</b></span></div>
       <div className="chart-actions">
+        {preferences.settings.vwap.enabled&&<span className="vwap-legend" title={VWAP_DESCRIPTION} data-vwap-value={vwap.value??""}>VWAP {vwap.loading?"…":vwap.value===undefined?"—":price(vwap.value)}<button aria-label="Настройки VWAP" onClick={()=>setIndicatorDialog(true)}>⚙</button><button aria-label="Скрыть VWAP" disabled={!preferences.ready||preferences.busy} onClick={()=>void preferences.save({...preferences.settings,vwap:{...preferences.settings.vwap,enabled:false}})}>◉</button><button aria-label="Удалить VWAP с графика" disabled={!preferences.ready||preferences.busy} onClick={()=>void preferences.save({...preferences.settings,vwap:{enabled:false,color:"#16a3a3",width:2}})}>×</button></span>}
         {(fills.length>0||executions.average!==undefined||tradesError)&&<button className={`icon-button ${showTrades?"selected":""}`} aria-label="Показать или скрыть мои сделки" aria-pressed={showTrades} title={tradesError||`Мои исполнения · ${executions.grouped.markers.length} меток${tradesTruncated?" · история ограничена 10 000 исполнений":""}`} onClick={()=>setShowTrades(v=>!v)}><MapPin size={15}/></button>}
         <button className={`icon-button indicator-open ${count?"selected":""}`} aria-label="Индикаторы" title={preferences.error||`${indicatorNames.join(", ")||"Выбрать индикаторы"} · ${Object.values(preferences.forAll).every(Boolean)?"общие настройки":"есть настройки только для этой пары"}`} onClick={()=>setIndicatorDialog(true)}><SlidersHorizontal size={15}/><span>Индикаторы</span>{count>0&&<b>{count}</b>}</button>
         <button className={`icon-button ${showVolume ? "selected" : ""}`} title="Показать или скрыть объём" aria-label="Показать или скрыть объём" aria-pressed={showVolume} disabled={!preferences.ready||preferences.busy} onClick={() => void preferences.save({...preferences.settings,volume:!showVolume})}><BarChart3 size={16} /></button>

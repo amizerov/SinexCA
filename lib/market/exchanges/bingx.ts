@@ -9,5 +9,5 @@ export const bingx=cachedAdapter({
   getPairs:async()=>bingxPairs(await request("/openApi/spot/v1/common/symbols"),null),
   getOverview:async()=>bingxTickers(await request("/openApi/spot/v1/ticker/24hr")),
   getTickers:async symbols=>(await Promise.all(symbols.map(async symbol=>bingxTickers(await request("/openApi/spot/v1/ticker/24hr",{symbol}),[symbol])))).flat(),
-  getCandles:async({symbol,timeframe,limit})=>bingxCandles(await request("/openApi/spot/v2/market/kline",{symbol,interval:restInterval("bingx",timeframe),limit:String(Math.min(1000,limit))})).slice(-limit),
+  getCandles:async({symbol,timeframe,limit,endTime})=>bingxCandles(await request("/openApi/spot/v2/market/kline",{symbol,interval:restInterval("bingx",timeframe),limit:String(Math.min(1000,limit)),...endTime!==undefined?{endTime:String(endTime*1000)}:{}})).slice(-limit),
 });

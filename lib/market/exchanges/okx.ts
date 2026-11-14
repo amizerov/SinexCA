@@ -9,9 +9,9 @@ export const okx = cachedAdapter({
   id: "okx",
   getPairs: async () => foreignPairs("okx", await request("/api/v5/public/instruments", { instType: "SPOT" }),null),
   getTickers: async symbols => foreignTickers("okx", await request("/api/v5/market/tickers", { instType: "SPOT" }), symbols),
-  getCandles: async ({ symbol, timeframe, limit }) => {
+  getCandles: async ({ symbol, timeframe, limit, endTime }) => {
     const bar = restInterval("okx",timeframe);
-    let candles: Candle[] = [], after: string | undefined;
+    let candles: Candle[] = [], after: string | undefined=endTime===undefined?undefined:String((endTime+1)*1000);
     for (let page = 0; page < Math.ceil(limit / 100) + 2 && candles.length < limit; page++) {
       const batch = foreignCandles("okx", await request("/api/v5/market/history-candles", { instId: symbol, bar, limit: String(Math.min(300, limit - candles.length)), ...(after ? { after } : {}) }));
       if (!batch.length) break;

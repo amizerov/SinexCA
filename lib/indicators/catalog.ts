@@ -76,7 +76,7 @@ const groups:{category:string;requires?:string;entries:Entry[]}[]=[
     ["ad-line","Accumulation / Distribution","Денежный поток по положению закрытия"],
     ["cmf","Chaikin Money Flow","Нормированный денежный поток Чайкина"],
     ["mfi","Money Flow Index","Осциллятор цены и объёма"],
-    ["vwap","VWAP","Средняя цена с весами по объёму"],
+    ["vwap","VWAP — средняя цена по объёму","Свечной расчёт по HLC3, сброс в 00:00 UTC"],
     ["anchored-vwap","Anchored VWAP","VWAP от выбранной точки отсчёта"],
     ["vpt","Volume Price Trend","Объём с учётом относительного изменения цены"],
     ["pvi","Positive Volume Index","Изменения при растущем объёме"],
@@ -165,7 +165,7 @@ const groups:{category:string;requires?:string;entries:Entry[]}[]=[
     ["multi-exchange","Multi-Exchange Indicator","Сопоставление данных нескольких бирж"],
   ]},
 ];
-const available=new Set(["sma","ema","rsi","volume"]);
+const available=new Set(["sma","ema","rsi","volume","vwap"]);
 export const INDICATOR_CATALOG:CatalogIndicator[]=groups.flatMap(group=>group.entries.map(([id,name,description])=>({id,name,description,category:group.category,available:available.has(id),...group.requires?{requires:group.requires}:{}})));
 export const INDICATOR_CATEGORIES=groups.map(group=>group.category);
 export function filterIndicatorCatalog(query:string,category:string){const terms=query.toLocaleLowerCase("ru").trim().split(/\s+/).filter(Boolean);return INDICATOR_CATALOG.filter(indicator=>(!category||indicator.category===category)&&terms.every(term=>`${indicator.name} ${indicator.description} ${indicator.category}`.toLocaleLowerCase("ru").includes(term)));}

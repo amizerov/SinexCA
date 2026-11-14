@@ -34,10 +34,10 @@ export const coinbase = cachedAdapter({
     })));
     return normalizeTickers(rows, Date.now(), "coinbase");
   },
-  getCandles: async ({ symbol, timeframe, limit }) => {
+  getCandles: async ({ symbol, timeframe, limit, endTime }) => {
     const seconds = Number(restInterval("coinbase",timeframe));
     const needed = timeframe === "4h" ? limit * 4 + 3 : limit;
-    let end = Math.floor(Date.now() / 1000 / seconds) * seconds + seconds;
+    let end = endTime===undefined?Math.floor(Date.now() / 1000 / seconds) * seconds + seconds:endTime;
     let candles: Candle[] = [];
     for (let page = 0; page < Math.ceil(needed / 299) + 1 && candles.length < needed; page++) {
       const start = end - Math.min(299, needed - candles.length + 1) * seconds;

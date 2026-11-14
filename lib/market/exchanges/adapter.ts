@@ -4,5 +4,5 @@ export interface ExchangeAdapter {
   getPairs(): Promise<TradingPair[]>;
   getTickers(symbols: string[]): Promise<Ticker[]>;
   getOverview?(): Promise<Ticker[]>;
-  getCandles(params: { symbol: string; timeframe: Timeframe; limit: number }): Promise<Candle[]>;
+  getCandles(params: { symbol: string; timeframe: Timeframe; limit: number; endTime?: number }): Promise<Candle[]>;
 }

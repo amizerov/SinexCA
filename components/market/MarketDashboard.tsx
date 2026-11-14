@@ -19,6 +19,7 @@ import { usePairOrder } from "@/hooks/use-pair-order";
 import { AccountButton,useAccount } from "@/components/Account";
 import { useIndicatorPreferences } from "@/hooks/use-indicator-preferences";
 import { hasIndicators } from "@/lib/indicators/settings";
+import {isVwapTimeframe} from "@/lib/indicators/vwap";
 import {usdtVolume} from "@/lib/market/usdt-volume";
 import {useMarketWorkspace} from "@/hooks/use-market-workspace";
 import {quoteAssets,resolveQuote,filterQuote,selectedPair} from "@/lib/market/pair-selection";
@@ -74,7 +75,7 @@ export function MarketDashboard() {
   const listLoading=!pairs.data?pairs.loading:sort!=="name"&&!statsReady;
   const orderedPairs=usePairOrder(exchange,pairs.data,tickerMap,effectiveSort,!listLoading);
   const ticker = pair ? tickerMap.get(pair.symbol) : undefined;
-  const market = useMarketCandles(exchange, pair, timeframe,hasIndicators(preferences.settings));
+  const market = useMarketCandles(exchange, pair, timeframe,hasIndicators(preferences.settings),preferences.settings.vwap.enabled&&isVwapTimeframe(timeframe));
   useEffect(()=>{
     if(!workspacePreferences.ready||!pair||market.loading||!market.candles.length)return;
     const key=workspacePreferences.identity?.ownerId+":"+favoriteKey(pair);

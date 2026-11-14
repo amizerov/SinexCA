@@ -32,6 +32,6 @@ export const binance: ExchangeAdapter = {
     const data=await request("ticker/24hr");
     return normalizeTickerBatch(Array.isArray(data)?data.filter(row=>allowed.has(row.symbol)):data,Date.now(),"binance");
   }),
-  getCandles: ({ symbol, timeframe, limit }) => marketCache.get(`binance:candles:${symbol}:${timeframe}:${limit}`, 10_000,
-    async () => normalizeCandles(await request("klines", { symbol, interval: timeframe, limit: String(limit) }))),
+  getCandles: ({ symbol, timeframe, limit, endTime }) => marketCache.get(`binance:candles:${symbol}:${timeframe}:${limit}:${endTime??"latest"}`, 10_000,
+    async () => normalizeCandles(await request("klines", { symbol, interval: timeframe, limit: String(limit),...endTime!==undefined?{endTime:String(endTime*1000)}:{} }))),
 };

@@ -13,7 +13,7 @@ try{
   await page.getByRole("spinbutton",{name:"Период EMA 1",exact:true}).fill("17");
   await page.getByRole("tab",{name:"Каталог",exact:true}).click();
   assert.ok(await page.getByRole("listitem").count()>100);
-  assert.equal(await page.locator(".catalog-available").count(),4);
+  assert.equal(await page.locator(".catalog-available").count(),5);
   await page.getByRole("textbox",{name:"Поиск индикатора"}).fill("MACD");
   assert.ok(await page.locator(".indicator-catalog-item strong").allTextContents().then(names=>names.includes("MACD")));
   await page.getByRole("combobox",{name:"Категория индикаторов"}).selectOption({label:"Ончейн"});

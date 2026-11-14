@@ -18,6 +18,6 @@ export function cachedAdapter(adapter: ExchangeAdapter, tickerTtl = 5000): Excha
     getPairs: () => marketCache.get(`${id}:catalog:v2`, 3600000, adapter.getPairs),
     getTickers: symbols => marketCache.get(`${id}:tickers:${[...new Set(symbols)].sort().join(",")}`, tickerTtl, () => adapter.getTickers([...new Set(symbols)])),
     getOverview: () => marketCache.get(`${id}:overview:v2`,15000,async()=>adapter.getOverview?adapter.getOverview():adapter.getTickers((await marketCache.get(`${id}:catalog:v2`,3600000,adapter.getPairs)).map(pair=>pair.symbol))),
-    getCandles: request => marketCache.get(`${id}:candles:${request.symbol}:${request.timeframe}:${request.limit}`, 10000, () => adapter.getCandles(request)),
+    getCandles: request => marketCache.get(`${id}:candles:${request.symbol}:${request.timeframe}:${request.limit}:${request.endTime??"latest"}`, 10000, () => adapter.getCandles(request)),
   };
 }

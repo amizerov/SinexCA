@@ -19,8 +19,8 @@ export const cryptocom=cachedAdapter({
     return [...new Map(pairs.map(pair=>[pair.symbol,pair])).values()];
   },
   getTickers:async symbols=>cryptocomTickers(await request("/exchange/v1/public/get-tickers",symbols.length===1?{instrument_name:symbols[0]}:{}),symbols),
-  getCandles:async({symbol,timeframe,limit})=>{
-    let candles:Candle[]=[],end="";
+  getCandles:async({symbol,timeframe,limit,endTime})=>{
+    let candles:Candle[]=[],end=endTime===undefined?"":String(endTime*1000);
     // The live API caps one response at 300 candles even when count is larger.
     for(let page=0;page<Math.ceil(limit/300)+2&&candles.length<limit;page++){
       const batch=cryptocomCandles(cryptocomResult(await request("/exchange/v1/public/get-candlestick",{instrument_name:symbol,timeframe:restInterval("cryptocom",timeframe),count:String(Math.min(300,limit-candles.length)),...end?{end_ts:end}:{}})).data);
