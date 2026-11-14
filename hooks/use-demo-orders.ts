@@ -16,6 +16,12 @@ export function useDemoOrders(){
     if(!r.ok)throw new Error(j.error?.message||"Не удалось получить заявки");if(j.ownerId!==owner)throw new Error("Аккаунт изменился");
     if(version>=applied.current){applied.current=version;setResult({ownerId:owner,data:j});setError("");}return j as DemoState;
   },[owner]);
-  useEffect(()=>{if(!owner)return;let stopped=false,timer:ReturnType<typeof setTimeout>;async function load(){try{await request();}catch(e){if(!stopped)setError(e instanceof Error?e.message:"Нет связи с DEMO-счётом");}if(!stopped)timer=setTimeout(load,2500);}void load();return()=>{stopped=true;clearTimeout(timer);};},[owner,request]);
+  useEffect(()=>{
+    if(!owner)return;let stopped=false,fetching=false,timer:ReturnType<typeof setTimeout>;
+    async function load(){if(stopped||document.hidden||fetching)return;fetching=true;try{await request();}catch(e){if(!stopped)setError(e instanceof Error?e.message:"Нет связи с DEMO-счётом");}finally{fetching=false;if(!stopped&&!document.hidden)timer=setTimeout(load,2500);}}
+    const visibility=()=>{clearTimeout(timer);if(!document.hidden)void load();};
+    document.addEventListener("visibilitychange",visibility);void load();
+    return()=>{stopped=true;clearTimeout(timer);document.removeEventListener("visibilitychange",visibility);};
+  },[owner,request]);
   return {data:result&&result.ownerId===owner?result.data:undefined,error,request};
 }

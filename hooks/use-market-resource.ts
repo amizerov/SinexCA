@@ -13,7 +13,7 @@ export function useMarketResource<T>(url: string | null, pollMs?: number) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let fetching = false, failures = 0, stopped = false;
     async function load() {
-      if (controller.signal.aborted || fetching || stopped) return;
+      if (controller.signal.aborted || fetching || stopped || (pollMs && document.hidden)) return;
       clearTimeout(timer); fetching = true;
       setResource(old => ({ url: url!, data: old?.url === url ? old.data : undefined, error: old?.url === url ? old.error : undefined, loading: true }));
       let retry = true;
@@ -38,8 +38,10 @@ export function useMarketResource<T>(url: string | null, pollMs?: number) {
     }
     void Promise.resolve().then(load);
     function online() { if (!stopped) { failures = 0; void load(); } }
+    function visibility() { if(!pollMs)return;clearTimeout(timer);if(!document.hidden)void load(); }
     window.addEventListener("online", online);
-    return () => { controller.abort(); clearTimeout(timer); window.removeEventListener("online", online); };
+    document.addEventListener("visibilitychange",visibility);
+    return () => { controller.abort(); clearTimeout(timer); window.removeEventListener("online", online);document.removeEventListener("visibilitychange",visibility); };
   }, [url, pollMs, revision]);
   const current = resource?.url === url ? resource : undefined;
   return { data: current?.data, error: current?.error, loading: !!url && (!current || current.loading), refresh };
