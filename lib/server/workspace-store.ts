@@ -6,10 +6,11 @@ export class WorkspaceStore{
     const row=this.db.prepare("SELECT settings,revision FROM private_workspace_settings WHERE owner_id=?").get(ownerId);
     return row?{settings:normalizeWorkspace(workspaceSettingsSchema.parse(JSON.parse(String(row.settings)))),revision:Number(row.revision)}:{settings:null,revision:0};
   }
-  save(ownerId:string,input:unknown){
+  save(ownerId:string,input:unknown,layoutSelection?:string|null){
     const patch=workspacePatchSchema.parse(input);this.db.exec("BEGIN IMMEDIATE");
     try{
       const previous=this.read(ownerId),settings=normalizeWorkspace({...DEFAULT_WORKSPACE,...previous.settings,...patch}),revision=previous.revision+1;
+      if(layoutSelection!==undefined)settings.layouts={...settings.layouts,activeId:layoutSelection&&settings.layouts.items.some(item=>item.id===layoutSelection)?layoutSelection:null};
       this.db.prepare("INSERT INTO private_workspace_settings(owner_id,settings,revision,updated_at) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET settings=excluded.settings,revision=excluded.revision,updated_at=excluded.updated_at").run(ownerId,JSON.stringify(settings),revision,Date.now());
       this.db.exec("COMMIT");return {settings,revision};
     }catch(error){this.db.exec("ROLLBACK");throw error;}

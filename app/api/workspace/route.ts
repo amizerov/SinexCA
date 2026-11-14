@@ -11,8 +11,9 @@ async function account(){const value=await requestAccount();if(value.fresh||!val
 export async function GET(){try{const value=await account();return NextResponse.json({data:new WorkspaceStore(getAccountStore().db).read(value.session.ownerId),ownerId:value.session.ownerId},{headers:authHeaders});}catch(error){return failure(error);}}
 export async function PATCH(request:Request){try{
   if(!isSameOrigin(request))throw new AccountError("Недопустимый источник запроса.",403);
-  const text=await request.text();if(text.length>65536)throw new AccountError("Слишком большой запрос.",413);
+  const text=await request.text();if(text.length>2_000_000)throw new AccountError("Слишком большой набор макетов. Удалите неиспользуемые макеты или рисунки.",413);
   const body=JSON.parse(text),value=await account();
   if(request.headers.get("X-Workspace-Id")!==value.session.ownerId)throw new AccountError("Аккаунт изменился. Обновите страницу.",409);
-  return NextResponse.json({data:new WorkspaceStore(getAccountStore().db).save(value.session.ownerId,body),ownerId:value.session.ownerId},{headers:authHeaders});
+  const selection=request.headers.get("X-Layout-Selection"),layoutSelection=selection===null?undefined:selection==="standard"?null:z.uuid().parse(selection);
+  return NextResponse.json({data:new WorkspaceStore(getAccountStore().db).save(value.session.ownerId,body,layoutSelection),ownerId:value.session.ownerId},{headers:authHeaders});
 }catch(error){return failure(error);}}

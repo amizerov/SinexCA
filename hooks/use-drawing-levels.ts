@@ -1,10 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { documentSchema, type DrawingScope, type HorizontalLevel } from "@/lib/drawings/types";
+import { documentSchema,scopeKey, type DrawingScope, type HorizontalLevel } from "@/lib/drawings/types";
+import {useWorkspacePreferences} from "./use-workspace-preferences";
+import {workspaceSnapshot,updateWorkspace} from "@/lib/ui/workspace-client";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error" | "conflict";
 interface SaveJob { levels: HorizontalLevel[]; mutationId: string }
 export function useDrawingLevels(scope: DrawingScope,ownerId:string) {
+  const workspace=useWorkspacePreferences(),workspaceRef=useRef(workspace);
+  useEffect(()=>{workspaceRef.current=workspace;},[workspace]);
   const ownerRef=useRef(ownerId);
   const [levels, setLevels] = useState<HorizontalLevel[]>([]);
   const [status, setStatus] = useState<SaveStatus>("loading");
@@ -27,6 +31,12 @@ export function useDrawingLevels(scope: DrawingScope,ownerId:string) {
       if (s.failed) s.failed = undefined; else s.pending = undefined;
       if (s.mounted) { setStatus("saving"); setError(""); }
       try {
+        const local=workspaceRef.current;
+        if(local.identity&&local.settings.layouts.standard){
+          const settings=workspaceSnapshot(local.identity).settings;
+          updateWorkspace(local.identity,{layoutDrawings:{...settings.layoutDrawings,[scopeKey(scopeRef.current)]:job.levels}});
+          s.revision++;if(s.mounted&&!s.pending)setStatus("saved");continue;
+        }
         const response = await fetch("/api/drawings", { method: "PUT", headers: { "Content-Type": "application/json","X-Workspace-Id":ownerRef.current }, body: JSON.stringify({ scope: scopeRef.current, revision: s.revision, ...job }), keepalive: true, signal: AbortSignal.timeout(12000) });
         const result = await response.json();
         if (!response.ok) { s.conflict = response.status === 409; throw new Error(result.error?.message || "Не удалось сохранить уровни."); }
@@ -48,6 +58,8 @@ export function useDrawingLevels(scope: DrawingScope,ownerId:string) {
     session.current = s;
     async function load() {
       try {
+        const stored=workspaceRef.current.settings.layoutDrawings?.[scopeKey(scopeRef.current)];
+        if(stored){s.ready=true;setReady(true);current.current=stored;setLevels(stored);setStatus("saved");return;}
         const params = new URLSearchParams(scopeRef.current);
         const response = await fetch(`/api/drawings?${params}`, { signal: controller.signal, cache: "no-store" });
         const result = await response.json();
@@ -64,7 +76,9 @@ export function useDrawingLevels(scope: DrawingScope,ownerId:string) {
     void load();
     const beforeUnload = (event: BeforeUnloadEvent) => { const state = session.current; if (state?.busy || state?.pending || state?.failed) event.preventDefault(); };
     window.addEventListener("beforeunload", beforeUnload);
-    return () => { s.mounted = false; controller.abort(); window.removeEventListener("beforeunload", beforeUnload); };
+    const capture=()=>{const local=workspaceRef.current;if(!s.ready||!local.identity||!local.settings.layouts.standard)return;const settings=workspaceSnapshot(local.identity).settings,key=scopeKey(scopeRef.current);if(JSON.stringify(settings.layoutDrawings?.[key])!==JSON.stringify(current.current))updateWorkspace(local.identity,{layoutDrawings:{...settings.layoutDrawings,[key]:current.current}});};
+    window.addEventListener("sinex:capture-layout-drawings",capture);
+    return () => { s.mounted = false; controller.abort(); window.removeEventListener("beforeunload", beforeUnload);window.removeEventListener("sinex:capture-layout-drawings",capture); };
   }, []);
   function preview(next: HorizontalLevel[]) { current.current = next; setLevels(next); }
   function commit(next: HorizontalLevel[], before = current.current) {

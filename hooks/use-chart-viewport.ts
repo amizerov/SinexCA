@@ -13,6 +13,9 @@ export function useChartViewport(chart:RefObject<IChartApi|null>,candles:Candle[
     const instance=chart.current,key=`${owner}:${scope}`;
     if(!instance||!preferences.ready||!candles.length||initialized.current===key)return;
     let timer:ReturnType<typeof setTimeout>|undefined;
+    let interactionUntil=0;
+    const interact=()=>{interactionUntil=Date.now()+1200;};
+    const element=instance.chartElement();
     let pending:{from:number;to:number}|undefined;
     const save=()=>{
       if(!pending)return;
@@ -24,6 +27,7 @@ export function useChartViewport(chart:RefObject<IChartApi|null>,candles:Candle[
       pending=undefined;current.update({chartViews:bounded});
     };
     const changed=()=>{
+      if(Date.now()>interactionUntil)return;
       const range=instance.timeScale().getVisibleRange();
       if(!range||typeof range.from!=="number"||typeof range.to!=="number"||range.to<=range.from)return;
       pending={from:range.from,to:range.to};clearTimeout(timer);timer=setTimeout(save,350);
@@ -38,9 +42,11 @@ export function useChartViewport(chart:RefObject<IChartApi|null>,candles:Candle[
     });
     initialized.current=key;
     window.addEventListener("pagehide",save);
+    window.addEventListener("sinex:capture-layout",save);
+    element.addEventListener("pointerdown",interact);element.addEventListener("wheel",interact,{passive:true});element.addEventListener("keydown",interact);element.addEventListener("sinex:viewport-input",interact);
     // The parent may already have disposed this chart before cleanup runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return()=>{window.removeEventListener("pagehide",save);cancelAnimationFrame(frame);clearTimeout(timer);if(chart.current===instance)instance.timeScale().unsubscribeVisibleTimeRangeChange(changed);save();initialized.current="";};
+    return()=>{element.removeEventListener("pointerdown",interact);element.removeEventListener("wheel",interact);element.removeEventListener("keydown",interact);element.removeEventListener("sinex:viewport-input",interact);window.removeEventListener("sinex:capture-layout",save);window.removeEventListener("pagehide",save);cancelAnimationFrame(frame);clearTimeout(timer);if(chart.current===instance)instance.timeScale().unsubscribeVisibleTimeRangeChange(changed);save();initialized.current="";};
     // Candle updates must not reset the viewport or resubscribe on every tick.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[chart,owner,scope,preferences.ready,candles.length>0]);

@@ -30,6 +30,7 @@ import {PanelDockProvider} from "./PanelDock";
 import {useChartTrades} from "@/hooks/use-chart-trades";
 import {useDockViewport,useMobileViewport} from "@/hooks/use-order-book-dock";
 import {ThemeToggle} from "@/components/ThemeToggle";
+import {TerminalLayoutsProvider,LayoutStatus} from "./TerminalLayouts";
 import {useFloatingNotice} from "@/components/FloatingNotices";
 
 import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
@@ -121,7 +122,7 @@ export function MarketDashboard() {
         loading={listLoading} error={pairs.error} select={setSelected} openSavedPair={openSavedPair}/>:undefined;
   const trades=showTrades?<TradesPanel inColumn={tradeColumn} key={`trades:${session?.ownerId??"guest"}:${workspacePair.exchange}:${workspacePair.baseAsset}:${workspacePair.quoteAsset}`} pair={workspacePair} pending={!pair} trades={pair?tickers.trades:[]} status={pair?tickers.status:"connecting"} connection={pair?tickers.connection:undefined} demo={orders.data} error={orders.error}/>:undefined;
   const tapeSide=tradesSide==="auto"?(marketPanel.mode==="left"?"left":"right"):tradesSide;
-  return <PanelDockProvider><div className="app-shell">
+  return <TerminalLayoutsProvider key={session?.ownerId||"guest"} indicators={preferences.document}><PanelDockProvider><div className="app-shell">
     <header className="topbar">
       <Link href="/" className="brand" aria-label="Sinex — главная"><span className="brand-mark"><BrandMark size={24} /></span><span className="brand-name">Sinex<small>terminal</small></span></Link>
       <div className="exchange-controls">
@@ -157,7 +158,7 @@ export function MarketDashboard() {
             {!marketsOpen&&<button className="button markets-toggle-button" onClick={()=>updateWorkspace({marketsOpen:true})} aria-label="Показать рынки" title="Показать список пар"><PanelRight size={14}/><span>Рынки</span></button>}
             {!mobile&&!tradesOpen&&<button className="button trades-toggle-button" disabled={!pair} onClick={()=>updateWorkspace({tradesOpen:true})} aria-label="Показать сделки" title="Показать сделки"><Activity size={14}/><span>Сделки</span></button>}
           </div>
-          <CandlestickChart fills={chartTrades.fills} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={orders.data?.account.portfolio?.positions||[]} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} />
+          <CandlestickChart fills={chartTrades.fills} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={orders.data?.account.portfolio?.positions||[]} orders={orders.data?.orders||[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${workspacePreferences.settings.layoutGeneration}:${exchange}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} />
         </section>
         <DemoOrdersPanel orders={orders} onSelect={order=>{setSearch("");updateWorkspace({exchange:order.exchange,selected:order.base,selectedQuote:order.quote,quote:order.quote,timeframe:nearestTimeframe(order.exchange,timeframe)});}}/>
       </main>
@@ -167,6 +168,7 @@ export function MarketDashboard() {
     <footer className="terminal-footer">
       <span>Sinex — криптовалютный терминал</span>
       <nav aria-label="Основные разделы"><Link href="/help">Справка</Link><Link href="/learn">Обучение</Link><Link href="/developers">Разработчикам</Link><Link href="/blog">Блог</Link><Link href="/about">О проекте</Link></nav>
+      <LayoutStatus/>
     </footer>
-  </div></PanelDockProvider>;
+  </div></PanelDockProvider></TerminalLayoutsProvider>;
 }

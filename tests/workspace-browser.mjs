@@ -19,21 +19,21 @@ try{
   const email=`workspace-a-${crypto.randomUUID()}@example.com`,emailB=`workspace-b-${crypto.randomUUID()}@example.com`;
   await a.request.get(`${baseURL}/api/auth/session`);const registered=await a.request.post(`${baseURL}/api/auth/register`,{data:{email,password}});assert.equal(registered.status(),200);const owner=(await registered.json()).data.ownerId;
   await page.goto(baseURL);await page.getByRole("button",{name:`Аккаунт ${email}`,exact:true}).waitFor();
-  await page.getByRole("button",{name:"Coinbase",exact:true}).click();await page.locator(".pair-row").filter({hasText:"ETH/USD"}).click();await page.getByRole("button",{name:"5m",exact:true}).click();
+  await page.getByRole("button",{name:"Coinbase",exact:true}).click();await page.locator(".pair-row").filter({hasText:"ETH/USD"}).click();await page.locator(".timeframe-select").selectOption("5m",{force:true});
   await page.getByRole("button",{name:"Добавить ETH/USD в избранное",exact:true}).click();
-  await page.getByRole("button",{name:"Показать стакан",exact:true}).click();let book=page.getByRole("dialog",{name:/^Стакан /});await book.locator(".book-bids .book-row").waitFor();
+  const showBook=page.getByRole("button",{name:"Показать стакан",exact:true});if(await showBook.count())await showBook.click();let book=page.getByRole("dialog",{name:/^Стакан /});await book.locator(".book-bids .book-row").waitFor();
   await book.getByRole("button",{name:"Открепить стакан",exact:true}).click();
   const head=await book.locator(".orderbook-window-header").boundingBox();await page.mouse.move(head.x+30,head.y+16);await page.mouse.down();await page.mouse.move(430,190,{steps:8});await page.mouse.up();
   await book.getByRole("button",{name:"Изменить размер стакана",exact:true}).focus();await page.keyboard.press("ArrowRight");await page.keyboard.press("ArrowDown");const geometry=await book.boundingBox();
   // Logout immediately after the edits must flush the debounce before invalidating the session.
-  await logout(page);assert.equal(await book.count(),0);assert.equal(await page.getByRole("button",{name:"Binance",exact:true}).getAttribute("aria-pressed"),"true");
-  await login(page,email);await book.locator(".book-bids .book-row").waitFor();assert.ok((await book.textContent()).includes("Coinbase · ETH/USD"));assert.equal(await page.getByRole("button",{name:"5m",exact:true}).getAttribute("aria-pressed"),"true");assert.deepEqual(await book.boundingBox(),geometry);
+  await logout(page);assert.ok(!(await book.allTextContents()).join(" ").includes("ETH/USD"),"Guest panels must not retain the account's pair");assert.equal(await page.getByRole("button",{name:"Binance",exact:true}).getAttribute("aria-pressed"),"true");
+  await login(page,email);await book.locator(".book-bids .book-row").waitFor();assert.ok((await book.textContent()).includes("Coinbase · ETH/USD"));assert.equal(await page.locator(".timeframe-select").inputValue(),"5m");assert.deepEqual(await book.boundingBox(),geometry);
   const remoteSession=await clean.request.post(`${baseURL}/api/auth/login`,{data:{email,password}});assert.equal(remoteSession.status(),200);const other=await clean.newPage();other.on("pageerror",e=>errors.push(e.message));await other.goto(baseURL);
   const remoteBook=other.getByRole("dialog",{name:/^Стакан /});await remoteBook.locator(".book-bids .book-row").waitFor();assert.ok((await remoteBook.textContent()).includes("Coinbase · ETH/USD"));assert.deepEqual(await remoteBook.boundingBox(),geometry);
   assert.equal(await other.getByRole("button",{name:"Убрать ETH/USD из избранного",exact:true}).count(),1,"Favorites restore from the account DB in a clean browser");
   await logout(page);
   assert.equal((await a.request.post(`${baseURL}/api/auth/register`,{data:{email:emailB,password}})).status(),200);await page.reload();await page.getByRole("button",{name:`Аккаунт ${emailB}`,exact:true}).waitFor();
-  assert.equal(await book.count(),0);assert.equal(await page.getByRole("button",{name:"Binance",exact:true}).getAttribute("aria-pressed"),"true");
+  assert.ok(!(await book.allTextContents()).join(" ").includes("ETH/USD"),"A different account must not inherit the previous account's pair");assert.equal(await page.getByRole("button",{name:"Binance",exact:true}).getAttribute("aria-pressed"),"true");
   const otherSettings=(await(await a.request.get(`${baseURL}/api/workspace`)).json()).data.settings;assert.ok(!otherSettings||otherSettings.marketPanel.favorites.length===0,"Other accounts do not inherit favorites");
   assert.equal((await a.request.patch(`${baseURL}/api/workspace`,{headers:{"X-Workspace-Id":owner},data:{selected:"SOL"}})).status(),409,"A stale owner cannot write another account's settings");
   await page.locator(".pair-row").filter({hasText:"SOL/USDT"}).click();await logout(page);await login(page,email);await book.locator(".book-bids .book-row").waitFor();assert.ok((await book.textContent()).includes("ETH/USD"));assert.deepEqual(await book.boundingBox(),geometry);
