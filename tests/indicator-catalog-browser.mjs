@@ -11,9 +11,24 @@ try{
   await page.getByRole("button",{name:"Индикаторы",exact:true}).click();
   await page.waitForFunction(()=>!document.querySelector('.indicator-dialog button[type="submit"]').disabled);
   await page.getByRole("spinbutton",{name:"Период EMA 1",exact:true}).fill("17");
+  for(const name of ["Профиль объёма","Отдельная панель","Поверх цены"]){
+    await page.getByRole("button",{name,exact:true}).click();
+    assert.equal(await page.locator('.indicator-section-toggle[aria-expanded="true"]').count(),1);
+    assert.equal(await page.getByRole("button",{name,exact:true}).getAttribute("aria-expanded"),"true");
+  }
+  assert.equal(await page.getByRole("spinbutton",{name:"Период EMA 1",exact:true}).inputValue(),"17","Collapsing sections preserves unsaved fields");
+  for(const [width,height] of [[1440,900],[375,700],[320,568],[568,320]]){
+    await page.setViewportSize({width,height});await page.getByRole("button",{name:"Профиль объёма",exact:true}).click();
+    await page.getByLabel("Профиль объёма",{exact:true}).check();
+    const geometry=await page.evaluate(()=>{const scroll=document.querySelector('.indicator-settings-scroll'),footer=document.querySelector('.indicator-dialog-actions'),dialog=document.querySelector('.indicator-dialog'),before=footer.getBoundingClientRect();scroll.scrollTop=10000;const after=footer.getBoundingClientRect();return {fixed:before.top===after.top,visible:after.top>=0&&after.bottom<=innerHeight,overflow:dialog.scrollWidth-dialog.clientWidth,scroll:scroll.scrollTop};});
+    assert.ok(geometry.fixed&&geometry.visible&&geometry.overflow<=1,JSON.stringify({width,height,geometry}));
+    if(height<=568)assert.ok(geometry.scroll>0,"Only the settings body scrolls on small screens");
+    await page.getByRole("button",{name:"Поверх цены",exact:true}).click();
+  }
+  await page.setViewportSize({width:1440,height:900});
   await page.getByRole("tab",{name:"Каталог",exact:true}).click();
   assert.ok(await page.getByRole("listitem").count()>100);
-  assert.equal(await page.locator(".catalog-available").count(),5);
+  assert.equal(await page.locator(".catalog-available").count(),6);
   await page.getByRole("textbox",{name:"Поиск индикатора"}).fill("MACD");
   assert.ok(await page.locator(".indicator-catalog-item strong").allTextContents().then(names=>names.includes("MACD")));
   await page.getByRole("combobox",{name:"Категория индикаторов"}).selectOption({label:"Ончейн"});
@@ -33,5 +48,5 @@ try{
     assert.ok(sizes.listHeight>20,JSON.stringify({width,height,sizes}));assert.ok(sizes.listScroll>0);assert.ok(sizes.fixed);assert.ok(sizes.overflowX<=1);assert.ok(sizes.bottom<=height);
   }
   await page.setViewportSize({width:375,height:700});await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/indicator-catalog-mobile.png"});
-  assert.deepEqual(errors,[]);console.log("PASS catalog of 100+ indicators, search/categories/statuses, preserved settings drafts, keyboard tabs and compact scrolling on mobile and landscape");
+  assert.deepEqual(errors,[]);console.log("PASS indicator accordion, fixed footer, preserved drafts, catalog, keyboard tabs and mobile/landscape scrolling");
 }finally{await browser.close();}

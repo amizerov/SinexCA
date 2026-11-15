@@ -131,7 +131,7 @@ const groups:{category:string;requires?:string;entries:Entry[]}[]=[
     ["hilbert-mode","Hilbert Trend / Cycle Mode","Разделение трендового и циклического режима"],
   ]},
   {category:"Профиль и поток сделок",requires:"Нужны данные сделок или стакана",entries:[
-    ["visible-profile","Visible Range Volume Profile","Распределение объёма видимого диапазона по цене"],
+    ["visible-profile","Профиль объёма — Volume Profile","Распределение объёма по цене. Видимый диапазон или текущий день UTC; приближённо по свечам."],
     ["session-profile","Session Volume Profile","Распределение объёма торговой сессии по цене"],
     ["fixed-profile","Fixed Range Volume Profile","Профиль объёма выбранного участка"],
     ["market-profile","Market Profile / TPO","Распределение времени торгов по цене"],
@@ -165,7 +165,7 @@ const groups:{category:string;requires?:string;entries:Entry[]}[]=[
     ["multi-exchange","Multi-Exchange Indicator","Сопоставление данных нескольких бирж"],
   ]},
 ];
-const available=new Set(["sma","ema","rsi","volume","vwap"]);
+const available=new Set(["sma","ema","rsi","volume","vwap","visible-profile"]);
 export const INDICATOR_CATALOG:CatalogIndicator[]=groups.flatMap(group=>group.entries.map(([id,name,description])=>({id,name,description,category:group.category,available:available.has(id),...group.requires?{requires:group.requires}:{}})));
 export const INDICATOR_CATEGORIES=groups.map(group=>group.category);
 export function filterIndicatorCatalog(query:string,category:string){const terms=query.toLocaleLowerCase("ru").trim().split(/\s+/).filter(Boolean);return INDICATOR_CATALOG.filter(indicator=>(!category||indicator.category===category)&&terms.every(term=>`${indicator.name} ${indicator.description} ${indicator.category}`.toLocaleLowerCase("ru").includes(term)));}

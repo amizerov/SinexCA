@@ -28,5 +28,5 @@ export const rawTickerSchema = z.object({
 });
 export const exchangeInfoSchema = z.object({ symbols: z.array(z.object({
   symbol: z.string(), status: z.string(), baseAsset: z.string(), quoteAsset: z.string(),
-  isSpotTradingAllowed: z.boolean(),
+  isSpotTradingAllowed: z.boolean(),filters:z.array(z.object({filterType:z.string(),tickSize:z.string().optional()})).optional(),
 })) });

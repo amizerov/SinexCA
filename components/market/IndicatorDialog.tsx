@@ -1,7 +1,8 @@
 "use client";
 import { useEffect,useRef,useState } from "react";
-import { X,Trash2 } from "lucide-react";
+import { X,Trash2,ChevronDown } from "lucide-react";
 import {VWAP_DESCRIPTION} from "@/lib/indicators/vwap";
+import {PROFILE_METHOD} from "@/lib/indicators/volume-profile";
 import { defaultIndicators,indicatorSettingsSchema,type IndicatorSettings } from "@/lib/indicators/settings";
 import type { useIndicatorPreferences } from "@/hooks/use-indicator-preferences";
 import {type IndicatorKey} from "@/lib/indicators/scope";
@@ -13,6 +14,8 @@ export function IndicatorDialog({preferences,close}:{preferences:ReturnType<type
   const initialRevision=useRef(preferences.revision);
   const [forAll,setForAll]=useState(preferences.forAll);
   const [tab,setTab]=useState<"settings"|"catalog">("settings");
+  const [section,setSection]=useState<"price"|"profile"|"pane"|null>("price");
+  function sectionHeader(key:"price"|"profile"|"pane",title:string){return <legend><button type="button" className="indicator-section-toggle" aria-expanded={section===key} aria-controls={`indicator-section-${key}`} onClick={()=>setSection(old=>old===key?null:key)}>{title}<ChevronDown size={15}/></button></legend>;}
   const scopeLabel=preferences.scope?`${preferences.scope.symbol} · ${EXCHANGES[preferences.scope.exchange].name}`:"текущая пара";
   useFloatingNotice("indicator-settings",error||preferences.error,{actionLabel:!preferences.ready?"Повторить загрузку":undefined,action:!preferences.ready?()=>location.reload():undefined});
   function scopeToggle(key:IndicatorKey,label:string){return <label className="indicator-scope" title={`Включено — общая настройка для всех монет и бирж. Выключено — только ${scopeLabel}.`}><input type="checkbox" aria-label={`${label}: для всех`} checked={forAll[key]} disabled={preferences.busy||!preferences.ready||!preferences.scope} onChange={event=>setForAll(old=>({...old,[key]:event.target.checked}))}/><span>Для всех</span></label>;}
@@ -28,8 +31,9 @@ export function IndicatorDialog({preferences,close}:{preferences:ReturnType<type
       <button type="button" id="indicator-catalog-tab" data-tab="catalog" role="tab" aria-selected={tab==="catalog"} aria-controls="indicator-catalog-panel" tabIndex={tab==="catalog"?0:-1} onClick={()=>setTab("catalog")}>Каталог</button>
     </div>
     <div className="indicator-settings-panel" id="indicator-settings-panel" role="tabpanel" aria-labelledby="indicator-settings-tab" hidden={tab!=="settings"}>
-    <form onSubmit={async event=>{event.preventDefault();if(initialRevision.current!==preferences.revision){setError("Настройки изменились в другой вкладке. Переоткройте окно индикаторов, чтобы загрузить их.");return;}const parsed=indicatorSettingsSchema.safeParse(draft);if(!parsed.success){setError("Проверьте периоды (2–200) и уровни RSI.");return;}setError("");if(await preferences.save(parsed.data,forAll))close();}}>
-      <fieldset disabled={preferences.busy||!preferences.ready}><legend>Поверх цены</legend>{[0,1,2].map(index=>average("ema",index))}{average("sma")}
+    <form onSubmit={async event=>{event.preventDefault();if(initialRevision.current!==preferences.revision){setError("Настройки изменились в другой вкладке. Переоткройте окно индикаторов, чтобы загрузить их.");return;}const parsed=indicatorSettingsSchema.safeParse(draft);if(!parsed.success){const key=parsed.error.issues[0]?.path[0];setSection(key==="profile"?"profile":key==="rsi"?"pane":"price");setError("Проверьте параметры индикаторов и допустимые значения полей.");return;}setError("");if(await preferences.save(parsed.data,forAll))close();}}>
+      <div className="indicator-settings-scroll">
+      <fieldset className="indicator-section" disabled={preferences.busy||!preferences.ready||section!=="price"}>{sectionHeader("price","Поверх цены")}<div className="indicator-section-body" id="indicator-section-price" hidden={section!=="price"}>{[0,1,2].map(index=>average("ema",index))}{average("sma")}
         <div className="indicator-row vwap-settings" title={VWAP_DESCRIPTION}>
           <label className="indicator-toggle"><input aria-label="Показывать VWAP" type="checkbox" checked={draft.vwap.enabled} onChange={event=>setDraft({...draft,vwap:{...draft.vwap,enabled:event.target.checked}})}/><span>VWAP</span></label>
           <label>Цвет<input aria-label="Цвет VWAP" type="color" value={draft.vwap.color} onChange={event=>setDraft({...draft,vwap:{...draft.vwap,color:event.target.value}})}/></label>
@@ -37,12 +41,26 @@ export function IndicatorDialog({preferences,close}:{preferences:ReturnType<type
           {scopeToggle("vwap","VWAP")}
           <button type="button" className="icon-button" aria-label="Удалить VWAP" onClick={()=>setDraft({...draft,vwap:defaultIndicators().vwap})}><Trash2 size={14}/></button>
         </div>
-      </fieldset>
-      <fieldset disabled={preferences.busy||!preferences.ready}><legend>Отдельная панель</legend><div className="indicator-row"><label className="indicator-toggle"><input type="checkbox" checked={draft.rsi.enabled} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,enabled:e.target.checked}})}/><span>RSI</span></label><label>Период<input aria-label="Период RSI" type="number" required min={2} max={200} value={draft.rsi.period} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,period:Number(e.target.value)}})}/></label><label>Цвет<input aria-label="Цвет RSI" type="color" value={draft.rsi.color} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,color:e.target.value}})}/></label>{scopeToggle("rsi","RSI")}</div><div className="rsi-levels"><label>Нижний уровень<input aria-label="Нижний уровень RSI" type="number" required min={0} max={49} value={draft.rsi.lower} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,lower:Number(e.target.value)}})}/></label><label>Верхний уровень<input aria-label="Верхний уровень RSI" type="number" required min={51} max={100} value={draft.rsi.upper} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,upper:Number(e.target.value)}})}/></label></div></fieldset>
+      </div></fieldset>
+      <fieldset className="profile-settings indicator-section" title={PROFILE_METHOD} disabled={preferences.busy||!preferences.ready||section!=="profile"}>{sectionHeader("profile","Профиль объёма")}<div className="indicator-section-body" id="indicator-section-profile" hidden={section!=="profile"}>
+        <div className="indicator-volume-row"><label className="indicator-toggle"><input aria-label="Профиль объёма" type="checkbox" checked={draft.profile.enabled} onChange={e=>setDraft({...draft,profile:{...draft.profile,enabled:e.target.checked}})}/><span>Профиль объёма</span></label>{scopeToggle("profile","Профиль объёма")}</div>
+        {draft.profile.enabled&&<div className="profile-settings-grid">
+          <label>Период<select aria-label="Период профиля" value={draft.profile.period} onChange={e=>setDraft({...draft,profile:{...draft.profile,period:e.target.value as "visible"|"day"}})}><option value="visible">Видимый диапазон</option><option value="day">Текущий день · UTC</option></select></label>
+          <label>Положение<select aria-label="Положение профиля" value={draft.profile.side} onChange={e=>setDraft({...draft,profile:{...draft.profile,side:e.target.value as "left"|"right"}})}><option value="left">Слева</option><option value="right">Справа</option></select></label>
+          <label>Ширина, %<input aria-label="Ширина профиля" type="number" min={5} max={30} required value={draft.profile.width} onChange={e=>setDraft({...draft,profile:{...draft.profile,width:Number(e.target.value)}})}/></label>
+          <label>Уровней<input aria-label="Уровни профиля" type="number" min={5} max={200} required value={draft.profile.levels} onChange={e=>setDraft({...draft,profile:{...draft.profile,levels:Number(e.target.value)}})}/></label>
+          <label>Цвет<input aria-label="Цвет профиля" type="color" value={draft.profile.color} onChange={e=>setDraft({...draft,profile:{...draft.profile,color:e.target.value}})}/></label>
+          <label>Непрозрачность, %<input aria-label="Непрозрачность профиля" type="number" min={5} max={80} required value={draft.profile.opacity} onChange={e=>setDraft({...draft,profile:{...draft.profile,opacity:Number(e.target.value)}})}/></label>
+          <label>Цвет POC<input aria-label="Цвет POC" type="color" value={draft.profile.pocColor} onChange={e=>setDraft({...draft,profile:{...draft.profile,pocColor:e.target.value}})}/></label>
+          <label className="indicator-toggle"><input aria-label="Линия POC" type="checkbox" checked={draft.profile.poc} onChange={e=>setDraft({...draft,profile:{...draft.profile,poc:e.target.checked}})}/><span>Линия POC</span></label>
+        </div>}
+      </div></fieldset>
+      <fieldset className="indicator-section" disabled={preferences.busy||!preferences.ready||section!=="pane"}>{sectionHeader("pane","Отдельная панель")}<div className="indicator-section-body" id="indicator-section-pane" hidden={section!=="pane"}><div className="indicator-row"><label className="indicator-toggle"><input type="checkbox" checked={draft.rsi.enabled} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,enabled:e.target.checked}})}/><span>RSI</span></label><label>Период<input aria-label="Период RSI" type="number" required min={2} max={200} value={draft.rsi.period} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,period:Number(e.target.value)}})}/></label><label>Цвет<input aria-label="Цвет RSI" type="color" value={draft.rsi.color} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,color:e.target.value}})}/></label>{scopeToggle("rsi","RSI")}</div><div className="rsi-levels"><label>Нижний уровень<input aria-label="Нижний уровень RSI" type="number" required min={0} max={49} value={draft.rsi.lower} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,lower:Number(e.target.value)}})}/></label><label>Верхний уровень<input aria-label="Верхний уровень RSI" type="number" required min={51} max={100} value={draft.rsi.upper} onChange={e=>setDraft({...draft,rsi:{...draft.rsi,upper:Number(e.target.value)}})}/></label></div></div></fieldset>
       <div className="indicator-volume-row"><label className="indicator-toggle"><input type="checkbox" checked={draft.volume} disabled={preferences.busy||!preferences.ready} onChange={e=>setDraft({...draft,volume:e.target.checked})}/><span>Показывать объём</span></label>{scopeToggle("volume","Объём")}</div>
+      </div>
       <div className="indicator-dialog-actions"><button type="button" className="button" disabled={preferences.busy} onClick={()=>setDraft(defaultIndicators())}>Сбросить</button><button type="button" className="button" onClick={close}>Отмена</button><button type="submit" className="account-submit" disabled={!preferences.ready||preferences.busy}>{preferences.busy?"Сохранение…":"Применить"}</button></div>
     </form>
     </div>
-    <div className="indicator-catalog-panel" id="indicator-catalog-panel" role="tabpanel" aria-labelledby="indicator-catalog-tab" hidden={tab!=="catalog"}><IndicatorCatalog openSettings={()=>setTab("settings")} addVwap={()=>{setDraft({...draft,vwap:{...draft.vwap,enabled:true}});setTab("settings");}}/></div>
+    <div className="indicator-catalog-panel" id="indicator-catalog-panel" role="tabpanel" aria-labelledby="indicator-catalog-tab" hidden={tab!=="catalog"}><IndicatorCatalog openSettings={id=>{setSection(id==="rsi"?"pane":"price");setTab("settings");}} addProfile={()=>{setDraft({...draft,profile:{...draft.profile,enabled:true}});setSection("profile");setTab("settings");}} addVwap={()=>{setDraft({...draft,vwap:{...draft.vwap,enabled:true}});setSection("price");setTab("settings");}}/></div>
   </dialog>;
 }

@@ -1,3 +1,4 @@
+import {priceIncrement} from "../price-increment";
 import { z } from "zod";
 import { choosePairs } from "../exchange-config";
 import { normalizeCandles, normalizeTickerBatch } from "../normalize";
@@ -13,7 +14,7 @@ export function extraData(id: ExtraId, input: unknown) {
 }
 export function extraPairs(id: ExtraId, input: unknown,quoteFilter:string|null="USDT"): TradingPair[] {
   const pairs: TradingPair[] = [];
-  const add = (symbol: string, base: string, quote: string) => { if (quoteFilter===null||quote===quoteFilter) pairs.push({ exchange: id, marketType: "spot", symbol, baseAsset: base, quoteAsset: quote }); };
+  const add = (symbol: string, base: string, quote: string,metadata:Record<string,unknown>={}) => { if (quoteFilter===null||quote===quoteFilter) pairs.push({ exchange: id, marketType: "spot", symbol, baseAsset: base, quoteAsset: quote,...priceIncrement(id,metadata) }); };
   if (id === "bitfinex") {
     const symbols = z.array(z.array(z.string())).parse(input)[0];
     for (const symbol of symbols) {
@@ -23,10 +24,10 @@ export function extraPairs(id: ExtraId, input: unknown,quoteFilter:string|null="
       if(base&&quote)add(`t${symbol}`,asset(base),asset(quote));
     }
   } else if (id === "mexc") {
-    for (const row of z.array(record).parse(record.parse(input).symbols)) if (row.status === "1" && row.isSpotTradingAllowed === true) add(String(row.symbol), String(row.baseAsset), String(row.quoteAsset));
+    for (const row of z.array(record).parse(record.parse(input).symbols)) if (row.status === "1" && row.isSpotTradingAllowed === true) add(String(row.symbol), String(row.baseAsset), String(row.quoteAsset),row);
   } else for (const row of z.array(record).parse(extraData(id, input))) {
-    if (id === "kucoin" && row.enableTrading === true) add(String(row.symbol), String(row.baseCurrency), String(row.quoteCurrency));
-    if (id === "htx" && row.state === "online" && row["api-trading"] !== "disabled") add(String(row.symbol), String(row["base-currency"]).toUpperCase(), String(row["quote-currency"]).toUpperCase());
+    if (id === "kucoin" && row.enableTrading === true) add(String(row.symbol), String(row.baseCurrency), String(row.quoteCurrency),row);
+    if (id === "htx" && row.state === "online" && row["api-trading"] !== "disabled") add(String(row.symbol), String(row["base-currency"]).toUpperCase(), String(row["quote-currency"]).toUpperCase(),row);
   }
   return choosePairs(pairs);
 }

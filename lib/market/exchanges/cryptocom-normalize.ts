@@ -1,10 +1,11 @@
+import {priceIncrement} from "../price-increment";
 import { z } from "zod";
 import { choosePairs } from "../exchange-config";
 import { normalizeCandles,normalizeTickerBatch } from "../normalize";
 import type { TradingPair } from "../types";
 const record=z.record(z.string(),z.unknown());
 export function cryptocomResult(input:unknown){const root=record.parse(input);if(root.code!==0)throw new Error("Crypto.com API error");return record.parse(root.result);}
-export function cryptocomPairs(input:unknown,quoteFilter:string|null="USDT"):TradingPair[]{return choosePairs(z.array(record).parse(cryptocomResult(input).data).filter(r=>r.inst_type==="CCY_PAIR"&&r.tradable===true&&(quoteFilter===null||r.quote_ccy===quoteFilter)).map(r=>({exchange:"cryptocom",marketType:"spot",symbol:z.string().parse(r.symbol),baseAsset:z.string().parse(r.base_ccy),quoteAsset:z.string().parse(r.quote_ccy)})));}
+export function cryptocomPairs(input:unknown,quoteFilter:string|null="USDT"):TradingPair[]{return choosePairs(z.array(record).parse(cryptocomResult(input).data).filter(r=>r.inst_type==="CCY_PAIR"&&r.tradable===true&&(quoteFilter===null||r.quote_ccy===quoteFilter)).map(r=>({exchange:"cryptocom",marketType:"spot",symbol:z.string().parse(r.symbol),baseAsset:z.string().parse(r.base_ccy),quoteAsset:z.string().parse(r.quote_ccy),...priceIncrement("cryptocom",r)})));}
 export function cryptocomCandles(input:unknown){return normalizeCandles(z.array(record).parse(input).map(r=>[r.t,r.o,r.h,r.l,r.c,r.v]));}
 export function cryptocomTickers(input:unknown,symbols:string[]){
   const allowed=new Set(symbols);

@@ -26,6 +26,7 @@ import {useChartViewport} from "@/hooks/use-chart-viewport";
 import {useDailyVwap} from "@/hooks/use-daily-vwap";
 import {useVwapSeries} from "@/hooks/use-vwap-series";
 import {VWAP_DESCRIPTION} from "@/lib/indicators/vwap";
+import {VolumeProfile} from "./VolumeProfile";
 
 interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
 export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
@@ -49,6 +50,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   const [indicatorDialog,setIndicatorDialog]=useState(false);
   const indicatorNames=[...preferences.settings.ema.filter(line=>line.enabled).map(line=>`EMA ${line.period}`),...preferences.settings.sma.enabled?[`SMA ${preferences.settings.sma.period}`]:[],...preferences.settings.rsi.enabled?[`RSI ${preferences.settings.rsi.period}`]:[]];
   if(preferences.settings.vwap.enabled)indicatorNames.push("VWAP");
+  if(preferences.settings.profile.enabled)indicatorNames.push("Профиль объёма");
   const count=indicatorNames.length;
   const vwap=useDailyVwap(exchange,symbol,timeframe,preferences.settings.vwap.enabled&&candles.length>0,history);
   useVwapSeries(chart,vwap.history,candles,timeframe,preferences.settings.vwap);
@@ -180,6 +182,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     <span className="sr-only" data-preferences-status={preferences.busy?"saving":"saved"}/>
     <div className="chart-canvas-wrap" onContextMenu={e=>{if(!onOrder||!series.current||!container.current||!candles.length)return;if((e.target as HTMLElement).closest("button,input,[data-drawing-id]"))return;const rect=container.current.getBoundingClientRect(),y=e.clientY-rect.top;if(y<0||y>(chart.current?.panes()[0]?.getHeight()??0))return;const p=series.current.coordinateToPrice(y);if(p===null||p<=0)return;e.preventDefault();setContext({x:Math.max(4,Math.min(e.clientX,window.innerWidth-245)),y:Math.max(4,Math.min(e.clientY,window.innerHeight-185)),price:Number(p.toPrecision(10))});}}>
       <div ref={container} className="chart-canvas" aria-label={`Свечной график ${symbol}, интервал ${timeframe}, время ${timeZone}`} role="img" />
+      {preferences.settings.profile.enabled&&<VolumeProfile key={`${exchange}:${symbol}:${timeframe}`} chart={chart} series={series} candles={candles} history={history} exchange={exchange} symbol={symbol} timeframe={timeframe} config={preferences.settings.profile}/>}
       <span className="sr-only" data-execution-count={showTrades?executions.grouped.markers.length:0}>{showTrades?executions.grouped.markers.map(t=>`${t.side==="buy"?"Покупка":"Продажа"}: ${t.quantity} ${t.base}, цена ${t.price} ${t.quote}`).join("; "):"Метки сделок скрыты"}</span>
       {showTrades&&executions.tooltip&&<ExecutionTooltip {...executions.tooltip}/>}
       {showTrades&&executions.average!==undefined&&<div className="chart-entry-summary" data-entry-price={executions.average} title="Средняя себестоимость остатка с комиссией покупки. Пунктир — ориентир безубыточности с DEMO-комиссией продажи 0,1%. Процент сравнивает текущую цену с этим ориентиром, без оценки глубины стакана."><span>Вход {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:8}).format(executions.average)} {executions.quote}</span>{basisChange!==undefined&&<strong className={basisChange>=0?"positive":"negative"}>{basisChange>0?"+":""}{basisChange.toFixed(2)}%</strong>}</div>}

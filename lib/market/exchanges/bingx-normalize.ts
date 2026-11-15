@@ -1,3 +1,4 @@
+import {priceIncrement} from "../price-increment";
 import {z} from "zod";
 import {choosePairs} from "../exchange-config";
 import {MarketError} from "../errors";
@@ -17,7 +18,7 @@ export function bingxPairs(input:unknown,quoteFilter:string|null="USDT"):Trading
   for(const row of z.array(object).parse(data.symbols)){
     if(row.status!==1||typeof row.symbol!=="string")continue;
     const [base,quote]=row.symbol.split("-");
-    if(base&&quote&&(quoteFilter===null||quote===quoteFilter))pairs.push({exchange:"bingx",marketType:"spot",symbol:row.symbol,baseAsset:base,quoteAsset:quote});
+    if(base&&quote&&(quoteFilter===null||quote===quoteFilter))pairs.push({exchange:"bingx",marketType:"spot",symbol:row.symbol,baseAsset:base,quoteAsset:quote,...priceIncrement("bingx",row)});
   }
   return choosePairs(pairs);
 }

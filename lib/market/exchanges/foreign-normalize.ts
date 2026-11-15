@@ -1,3 +1,4 @@
+import {priceIncrement} from "../price-increment";
 import { z } from "zod";
 import { MarketError } from "../errors";
 import { normalizeCandles, normalizeTickerBatch } from "../normalize";
@@ -21,23 +22,23 @@ export function unwrap(exchange: ExchangeId, input: unknown): unknown {
 export function foreignPairs(exchange: ExchangeId, input: unknown,quoteFilter:string|null=EXCHANGES[exchange].quote): TradingPair[] {
   const data = unwrap(exchange, input);
   const pairs: TradingPair[] = [];
-  const add = (symbol: unknown, base: unknown, quote: unknown, active: boolean) => {
-    if (active && (quoteFilter===null||quote===quoteFilter)) pairs.push({ exchange, marketType: "spot", symbol: z.string().parse(symbol), baseAsset: z.string().parse(base), quoteAsset: z.string().parse(quote) });
+  const add = (symbol: unknown, base: unknown, quote: unknown, active: boolean,metadata:Record<string,unknown>={}) => {
+    if (active && (quoteFilter===null||quote===quoteFilter)) pairs.push({ exchange, marketType: "spot", symbol: z.string().parse(symbol), baseAsset: z.string().parse(base), quoteAsset: z.string().parse(quote),...priceIncrement(exchange,metadata) });
   };
   if (exchange === "kraken") {
     for (const [symbol, value] of Object.entries(record.parse(data))) {
       const r = record.parse(value);
       if (typeof r.wsname !== "string") continue;
       const [base, quote] = r.wsname.split("/");
-      add(symbol, base === "XBT" ? "BTC" : base, quote === "XBT" ? "BTC" : quote, r.status === "online");
+      add(symbol, base === "XBT" ? "BTC" : base, quote === "XBT" ? "BTC" : quote, r.status === "online",r);
     }
   } else for (const r of records.parse(data)) {
     switch (exchange) {
-      case "bybit": add(r.symbol, r.baseCoin, r.quoteCoin, r.status === "Trading"); break;
-      case "okx": add(r.instId, r.baseCcy, r.quoteCcy, r.state === "live"); break;
-      case "bitget": add(r.symbol, r.baseCoin, r.quoteCoin, r.status === "online"); break;
-      case "gate": add(r.id, r.base, r.quote, r.trade_status === "tradable"); break;
-      case "coinbase": add(r.id, r.base_currency, r.quote_currency, r.status === "online" && r.trading_disabled === false); break;
+      case "bybit": add(r.symbol, r.baseCoin, r.quoteCoin, r.status === "Trading",r); break;
+      case "okx": add(r.instId, r.baseCcy, r.quoteCcy, r.state === "live",r); break;
+      case "bitget": add(r.symbol, r.baseCoin, r.quoteCoin, r.status === "online",r); break;
+      case "gate": add(r.id, r.base, r.quote, r.trade_status === "tradable",r); break;
+      case "coinbase": add(r.id, r.base_currency, r.quote_currency, r.status === "online" && r.trading_disabled === false,r); break;
     }
   }
   return choosePairs(pairs);
