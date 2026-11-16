@@ -27,10 +27,13 @@ import {useDailyVwap} from "@/hooks/use-daily-vwap";
 import {useVwapSeries} from "@/hooks/use-vwap-series";
 import {VWAP_DESCRIPTION} from "@/lib/indicators/vwap";
 import {VolumeProfile} from "./VolumeProfile";
+import {LiquidityHeatmap} from "./LiquidityHeatmap";
+import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
 
-interface Props { fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
-export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
+interface Props { quoteAsset?:string; fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
+export function CandlestickChart({ quoteAsset,fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
   const {session}=useAccount();
+  const workspace=useWorkspacePreferences();
   const timeZone=useBrowserTimeZone();
   const container = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
@@ -51,6 +54,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
   const indicatorNames=[...preferences.settings.ema.filter(line=>line.enabled).map(line=>`EMA ${line.period}`),...preferences.settings.sma.enabled?[`SMA ${preferences.settings.sma.period}`]:[],...preferences.settings.rsi.enabled?[`RSI ${preferences.settings.rsi.period}`]:[]];
   if(preferences.settings.vwap.enabled)indicatorNames.push("VWAP");
   if(preferences.settings.profile.enabled)indicatorNames.push("Профиль объёма");
+  if(workspace.settings.heatmap.enabled)indicatorNames.push("Ликвидность");
   const count=indicatorNames.length;
   const vwap=useDailyVwap(exchange,symbol,timeframe,preferences.settings.vwap.enabled&&candles.length>0,history);
   useVwapSeries(chart,vwap.history,candles,timeframe,preferences.settings.vwap);
@@ -170,6 +174,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     <div className="chart-tools">
     <div className="ohlc"><span>O <b>{price(legend?.open)}</b></span><span>H <b>{price(legend?.high)}</b></span><span>L <b>{price(legend?.low)}</b></span><span>C <b className={legend && legend.close >= legend.open ? "positive" : "negative"}>{price(legend?.close)}</b></span><span className="ohlc-volume">Объём <b>{compact(legend?.volume)}</b></span></div>
       <div className="chart-actions">
+
         {preferences.settings.vwap.enabled&&<span className="vwap-legend" title={VWAP_DESCRIPTION} data-vwap-value={vwap.value??""}>VWAP {vwap.loading?"…":vwap.value===undefined?"—":price(vwap.value)}<button aria-label="Настройки VWAP" onClick={()=>setIndicatorDialog(true)}>⚙</button><button aria-label="Скрыть VWAP" disabled={!preferences.ready||preferences.busy} onClick={()=>void preferences.save({...preferences.settings,vwap:{...preferences.settings.vwap,enabled:false}})}>◉</button><button aria-label="Удалить VWAP с графика" disabled={!preferences.ready||preferences.busy} onClick={()=>void preferences.save({...preferences.settings,vwap:{enabled:false,color:"#16a3a3",width:2}})}>×</button></span>}
         {(fills.length>0||executions.average!==undefined||tradesError)&&<button className={`icon-button ${showTrades?"selected":""}`} aria-label="Показать или скрыть мои сделки" aria-pressed={showTrades} title={tradesError||`Мои исполнения · ${executions.grouped.markers.length} меток${tradesTruncated?" · история ограничена 10 000 исполнений":""}`} onClick={()=>setShowTrades(v=>!v)}><MapPin size={15}/></button>}
         <button className={`icon-button indicator-open ${count?"selected":""}`} aria-label="Индикаторы" title={preferences.error||`${indicatorNames.join(", ")||"Выбрать индикаторы"} · ${Object.values(preferences.forAll).every(Boolean)?"общие настройки":"есть настройки только для этой пары"}`} onClick={()=>setIndicatorDialog(true)}><SlidersHorizontal size={15}/><span>Индикаторы</span>{count>0&&<b>{count}</b>}</button>
@@ -182,6 +187,7 @@ export function CandlestickChart({ fills=[],positions=[],tradesError,tradesTrunc
     <span className="sr-only" data-preferences-status={preferences.busy?"saving":"saved"}/>
     <div className="chart-canvas-wrap" onContextMenu={e=>{if(!onOrder||!series.current||!container.current||!candles.length)return;if((e.target as HTMLElement).closest("button,input,[data-drawing-id]"))return;const rect=container.current.getBoundingClientRect(),y=e.clientY-rect.top;if(y<0||y>(chart.current?.panes()[0]?.getHeight()??0))return;const p=series.current.coordinateToPrice(y);if(p===null||p<=0)return;e.preventDefault();setContext({x:Math.max(4,Math.min(e.clientX,window.innerWidth-245)),y:Math.max(4,Math.min(e.clientY,window.innerHeight-185)),price:Number(p.toPrecision(10))});}}>
       <div ref={container} className="chart-canvas" aria-label={`Свечной график ${symbol}, интервал ${timeframe}, время ${timeZone}`} role="img" />
+      {workspace.ready&&workspace.settings.heatmap.enabled&&<LiquidityHeatmap key={`${exchange}:${symbol}`} chart={chart} series={series} candles={candles} exchange={exchange} symbol={symbol} quoteAsset={quoteAsset} config={workspace.settings.heatmap}/>}
       {preferences.settings.profile.enabled&&<VolumeProfile key={`${exchange}:${symbol}:${timeframe}`} chart={chart} series={series} candles={candles} history={history} exchange={exchange} symbol={symbol} timeframe={timeframe} config={preferences.settings.profile}/>}
       <span className="sr-only" data-execution-count={showTrades?executions.grouped.markers.length:0}>{showTrades?executions.grouped.markers.map(t=>`${t.side==="buy"?"Покупка":"Продажа"}: ${t.quantity} ${t.base}, цена ${t.price} ${t.quote}`).join("; "):"Метки сделок скрыты"}</span>
       {showTrades&&executions.tooltip&&<ExecutionTooltip {...executions.tooltip}/>}

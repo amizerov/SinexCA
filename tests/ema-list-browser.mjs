@@ -1,0 +1,32 @@
+import {chromium} from "playwright-core";
+import assert from "node:assert/strict";
+const browser=await chromium.launch({channel:"chrome",headless:true}),base=process.env.BASE_URL||"http://127.0.0.1:3002";
+try{
+  const context=await browser.newContext({viewport:{width:1600,height:1000}});
+  await context.routeWebSocket(/wss:\/\//,socket=>socket.close());
+  await context.route("**/api/market/**",route=>{const url=new URL(route.request().url()),exchange=url.searchParams.get("exchange")||"binance",now=Math.floor(Date.now()/3600000)*3600;
+    return route.fulfill({json:{data:url.pathname.endsWith("/pairs")?[{exchange,marketType:"spot",symbol:"BTCUSDT",baseAsset:"BTC",quoteAsset:"USDT"}]:url.pathname.endsWith("/candles")?Array.from({length:120},(_,i)=>({time:now-(119-i)*3600,open:100,high:102,low:99,close:100+Math.sin(i/5),volume:20})):[]}});
+  });
+  const page=await context.newPage(),errors=[];page.on("pageerror",error=>errors.push(error.message));await page.goto(base);
+  await page.locator(".chart-caption").filter({hasText:"120 свечей"}).waitFor();
+  const dialog=page.getByRole("dialog",{name:"Индикаторы",exact:true});
+  const open=async()=>{await page.getByRole("button",{name:"Индикаторы",exact:true}).click();await dialog.waitFor();};
+  const apply=async()=>{await dialog.getByRole("button",{name:"Применить",exact:true}).click();await dialog.waitFor({state:"hidden"});};
+  await open();for(let i=0;i<7;i++)await dialog.getByRole("button",{name:"Добавить EMA",exact:true}).click();
+  await dialog.getByLabel("Период EMA 10",{exact:true}).fill("120");
+  await dialog.getByRole("checkbox",{name:"EMA 10: для всех",exact:true}).uncheck();await apply();
+  await page.reload();await page.locator(".chart-caption").filter({hasText:"120 свечей"}).waitFor();await open();
+  assert.equal(await dialog.getByLabel("Период EMA 10",{exact:true}).inputValue(),"120");
+  assert.equal(await dialog.getByRole("checkbox",{name:"EMA 10: для всех",exact:true}).isChecked(),false);
+  await dialog.getByRole("button",{name:"Добавить EMA",exact:true}).click();await dialog.getByRole("button",{name:"Отмена",exact:true}).click();
+  await open();assert.equal(await dialog.getByLabel("Период EMA 11",{exact:true}).count(),0);
+  await dialog.getByRole("button",{name:"Удалить EMA 4",exact:true}).click();
+  assert.equal(await dialog.getByLabel("Период EMA 10",{exact:true}).count(),0);
+  assert.equal(await dialog.getByLabel("Период EMA 9",{exact:true}).inputValue(),"120");
+  assert.equal(await dialog.getByRole("checkbox",{name:"EMA 9: для всех",exact:true}).isChecked(),false);await apply();
+  await open();for(let i=9;i>=1;i--)await dialog.getByRole("button",{name:`Удалить EMA ${i}`,exact:true}).click();await apply();
+  await page.reload();await page.locator(".chart-caption").filter({hasText:"120 свечей"}).waitFor();await open();
+  assert.equal(await dialog.getByLabel("Период EMA 1",{exact:true}).count(),0);
+  await dialog.getByRole("button",{name:"Добавить EMA",exact:true}).click();assert.equal(await dialog.getByLabel("Период EMA 1",{exact:true}).inputValue(),"20");await apply();
+  assert.deepEqual(errors,[]);console.log("EMA: add ten, scoped settings, reload, cancel, delete and renumber, remove all and add again passed");
+}finally{await browser.close();}
