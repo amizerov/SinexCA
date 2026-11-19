@@ -131,6 +131,7 @@ export function MarketDashboard() {
         <select className="exchange-select" aria-label="Биржа" value={exchange} onChange={e => changeExchange(e.target.value as ExchangeId)}>{EXCHANGE_IDS.map(id => <option key={id} value={id}>{EXCHANGES[id].name}</option>)}</select>
       </div>
       <ThemeToggle />
+      <Link href="/prices" className="help-link" title="Цены на биржах" aria-label="Сравнить цены на биржах">⇄</Link>
       <Link href="/help" className="help-link" title="Справка и обучение" aria-label="Открыть справку"><CircleHelp size={17}/></Link>
       <AccountButton />
     </header>
@@ -168,7 +169,7 @@ export function MarketDashboard() {
     {orderDraft&&orderDraft.ownerId===session?.ownerId&&<DemoOrderDialog key={`${session?.ownerId}:${orderDraft.pair.exchange}:${orderDraft.pair.symbol}`} pair={orderDraft.pair} draft={orderDraft} currentPrice={pair?.exchange===orderDraft.pair.exchange&&pair?.symbol===orderDraft.pair.symbol?lastPrice:undefined} orders={orders} close={()=>setOrderDraft(null)}/>}
     <footer className="terminal-footer">
       <span>Sinex — криптовалютный терминал</span>
-      <nav aria-label="Основные разделы"><Link href="/help">Справка</Link><Link href="/learn">Обучение</Link><Link href="/developers">Разработчикам</Link><Link href="/blog">Блог</Link><Link href="/about">О проекте</Link></nav>
+      <nav aria-label="Основные разделы"><Link href="/prices">Цены на биржах</Link><Link href="/help">Справка</Link><Link href="/learn">Обучение</Link><Link href="/developers">Разработчикам</Link><Link href="/blog">Блог</Link><Link href="/about">О проекте</Link></nav>
       <LayoutStatus/>
     </footer>
   </div></PanelDockProvider></TerminalLayoutsProvider>;

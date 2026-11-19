@@ -1,0 +1,46 @@
+import {chromium} from "playwright-core";
+import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
+const browser=await chromium.launch({channel:"chrome",headless:true}),base=process.env.BASE_URL||"http://127.0.0.1:3002";
+try{
+  const context=await browser.newContext({viewport:{width:1500,height:1100}});
+  let depthChecks=0;const tradingWrites=[];
+  await context.route("**/api/market/comparison?*",route=>{
+    const ids=new URL(route.request().url()).searchParams.get("exchanges").split(","),now=Date.now();
+    const body=ids.map(exchange=>{const values=exchange==="binance"?[99,100]:exchange==="bybit"?[102,103]:[100,103];
+      const quote={exchange,asset:"BTC",symbol:exchange==="okx"?"BTC-USDT":"BTCUSDT",bid:values[0],ask:values[1],bidSize:20,askSize:20,last:9999,receivedAt:now,source:exchange==="binance"?"ws":"rest"};
+      const snapshot={exchange,status:exchange==="binance"?"live":"rest",error:exchange==="gate"?"Тест: источник недоступен":"",available:["BTC","ETH","SOL"],quotes:exchange==="gate"?[]:[quote,{...quote,asset:"SOL",symbol:"SOLUSDT",receivedAt:now-60000},{...quote,asset:"ETH",symbol:"ETHUSDT",bid:null,ask:null,last:2000}]};
+      return `data: ${JSON.stringify(snapshot)}\n\n`;
+    }).join("");return route.fulfill({contentType:"text/event-stream",body});
+  });
+  await context.route("**/api/market/comparison-depth?*",route=>{depthChecks++;const url=new URL(route.request().url());assert.equal(url.searchParams.get("asset"),"BTC");return route.fulfill({json:{data:{estimate:{complete:true,profit:17.96,percent:1.796,quantity:9.99,buyAverage:100,sellAverage:102,totalCost:1000,netProceeds:1017.96,fees:2.04,receivedAt:Date.now()}}}});});
+  const page=await context.newPage(),errors=[];page.on("pageerror",error=>errors.push(error.message));page.on("request",request=>{if(request.url().includes("/api/paper/")&&request.method()!=="GET")tradingWrites.push(request.url());});
+  await page.goto(`${base}/prices`);await page.getByRole("heading",{name:"Цены на биржах",exact:true}).waitFor();
+  await page.getByLabel("Поиск монеты",{exact:true}).fill("BTC");
+  await page.locator(".comparison-table tbody tr").filter({hasText:"BTC"}).locator("td strong").filter({hasText:"100"}).first().waitFor();
+  assert.equal(await page.locator(".comparison-table tbody tr").count(),1);
+  await page.getByRole("button",{name:"Добавить BTC в избранное",exact:true}).click();
+  await page.getByRole("tab",{name:"Направления покупки и продажи",exact:true}).click();
+  const best=page.locator(".comparison-routes tbody tr").first();assert.match(await best.innerText(),/Binance/);assert.match(await best.innerText(),/Bybit/);
+  await best.getByRole("button",{name:"Проверить сумму",exact:true}).click();await best.getByText(/17,96 USDT/).waitFor();assert.equal(depthChecks,1);
+  await page.getByLabel("Поиск монеты",{exact:true}).fill("SOL");await page.getByText(/Нет подходящих свежих направлений/).waitFor();
+  await page.getByLabel("Поиск монеты",{exact:true}).fill("ETH");await page.getByText(/Нет подходящих свежих направлений/).waitFor();
+  await page.getByLabel("Поиск монеты",{exact:true}).fill("BTC");
+  await page.getByText("Комиссии бирж",{exact:true}).click();await page.getByLabel("Комиссия Binance",{exact:true}).fill("2");
+  await page.getByText("Комиссии бирж",{exact:true}).click();
+  await page.getByRole("checkbox",{name:"Только положительная оценка после комиссий",exact:true}).check();await page.getByText(/Нет подходящих свежих направлений/).waitFor();
+  await page.getByRole("checkbox",{name:"Только положительная оценка после комиссий",exact:true}).uncheck();
+  await page.getByRole("button",{name:"Gate",exact:true}).click();await page.getByText("Тест: источник недоступен",{exact:false}).waitFor();
+  await page.reload();await page.getByText("Комиссии бирж",{exact:true}).click();assert.equal(await page.getByLabel("Комиссия Binance",{exact:true}).inputValue(),"2");await page.getByText("Комиссии бирж",{exact:true}).click();
+  await page.getByRole("checkbox",{name:"Избранное",exact:true}).check();await page.locator(".comparison-table tbody tr").getByRole("button",{name:"Убрать BTC из избранного",exact:true}).waitFor();
+  await page.getByRole("checkbox",{name:"Избранное",exact:true}).uncheck();
+  await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/price-comparison.png",fullPage:true});
+  await page.setViewportSize({width:390,height:844});await page.getByText("Комиссии бирж",{exact:true}).click();
+  assert.equal(await page.evaluate(()=>document.querySelector(".comparison-page").scrollWidth>window.innerWidth),false,"No page overflow on mobile");
+  await page.screenshot({path:".qa/price-comparison-mobile.png",fullPage:true});
+  await page.getByText("Комиссии бирж",{exact:true}).click();await page.getByRole("button",{name:"Пауза",exact:true}).click();
+  await page.clock.install();await page.clock.fastForward(17000);
+  await page.getByRole("tab",{name:"Направления покупки и продажи",exact:true}).click();await page.getByText(/Нет подходящих свежих направлений/).waitFor();
+  assert.deepEqual(tradingWrites,[]);assert.deepEqual(errors,[]);
+  console.log("Comparison: live table, bid/ask routes, fees, stale/missing quotes, depth check, source failure, persistence, pause and mobile passed");
+}finally{await browser.close();}

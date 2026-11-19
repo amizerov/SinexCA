@@ -33,7 +33,7 @@ test("published knowledge articles have unique valid metadata and resolvable int
 
     for (const match of parsed.content.matchAll(/\[[^\]]+\]\((\/[^)]+)\)/g)) {
       const target = match[1].split("#")[0];
-      assert.ok(target === "/" || target === "/help" || target === "/learn" || target === "/developers" || target === "/blog" || urls.has(target), `${article.file}: missing link ${target}`);
+      assert.ok(target === "/" || target === "/prices" || target === "/help" || target === "/learn" || target === "/developers" || target === "/blog" || urls.has(target), `${article.file}: missing link ${target}`);
     }
   }
 });

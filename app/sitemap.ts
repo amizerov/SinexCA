@@ -11,6 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }));
   return [
     { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
+    { url: absoluteUrl("/prices"), changeFrequency: "daily", priority: 0.8 },
     { url: absoluteUrl("/about"), changeFrequency: "yearly", priority: 0.5 },
     ...CONTENT_SECTIONS.map((section) => ({ url: absoluteUrl(`/${section}`), changeFrequency: "weekly" as const, priority: 0.8 })),
     ...articles,
