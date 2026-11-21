@@ -24,6 +24,17 @@ export function pairForAsset(pairs:TradingPair[],asset:string){
   const matches=pairs.filter(pair=>pair.marketType==="spot"&&pair.baseAsset===asset&&pair.quoteAsset==="USDT");
   return matches.length===1?matches[0]:undefined;
 }
+/** Symbols used to start public BBO streams while a venue's REST catalog is unavailable. */
+export function fallbackComparisonPairs(exchange:ExchangeId):TradingPair[]{
+  const symbol=(asset:string)=>{
+    if(["okx","coinbase","kucoin","bingx"].includes(exchange))return `${asset}-USDT`;
+    if(["gate","whitebit","cryptocom"].includes(exchange))return `${asset}_USDT`;
+    if(exchange==="htx")return `${asset.toLowerCase()}usdt`;
+    if(exchange==="bitfinex")return `t${asset}UST`;
+    return `${asset}USDT`;
+  };
+  return COMPARISON_ASSETS.map(baseAsset=>({exchange,marketType:"spot",symbol:symbol(baseAsset),baseAsset,quoteAsset:"USDT"}));
+}
 /** Fees assumed charged in quote currency; never extrapolate past published book depth. */
 export function depthEstimate(buy:OrderBook,sell:OrderBook,budget:number,buyFee:number,sellFee:number,now:number){
   if(![budget,buyFee,sellFee].every(Number.isFinite)||budget<=0||buyFee<0||sellFee<0||buyFee>5||sellFee>5)throw new Error("Некорректная сумма или комиссия.");

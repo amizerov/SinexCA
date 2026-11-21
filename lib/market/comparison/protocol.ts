@@ -1,28 +1,45 @@
 import type {ExchangeId,TradingPair} from "../types";
 import {object} from "../orderbook/model";
+import {protobufFields} from "../mexc-protobuf";
 import type {ComparisonQuote} from "./model";
+
+export interface ComparisonToken {endpoint:string;token:string;pingInterval:number}
+export interface ComparisonProtocol {
+  url:string;subscriptions:unknown[];subscribeDelayMs?:number;subscriptionIntervalMs?:number;ping?:unknown;pingMs?:number;binary?:"gzip"|"protobuf";
+  reply?:(input:unknown)=>unknown;decode:(input:unknown,now?:number)=>ComparisonQuote[];
+}
 const positive=(value:unknown)=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value))&&Number(value)>0?Number(value):null;
 const quantity=(value:unknown)=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
-export function comparisonProtocol(exchange:ExchangeId,pairs:TradingPair[]){
-  if(!["binance","bybit","okx"].includes(exchange)||!pairs.length)return undefined;
+const rows=(value:unknown):unknown[]=>Array.isArray(value)?value:[];
+const text=(value:number|Uint8Array|undefined)=>value instanceof Uint8Array?new TextDecoder().decode(value):"";
+const recent=(value:unknown,now:number)=>Number.isFinite(Number(value))&&Math.abs(now-Number(value))<=15000;
+
+export function comparisonProtocol(exchange:ExchangeId,pairs:TradingPair[],token?:ComparisonToken):ComparisonProtocol|undefined{
+  if(!pairs.length)return undefined;
   const bySymbol=new Map(pairs.map(pair=>[pair.symbol,pair]));
-  const url=exchange==="binance"?`wss://data-stream.binance.vision/stream?streams=${pairs.map(pair=>`${pair.symbol.toLowerCase()}@bookTicker`).join("/")}`:exchange==="bybit"?"wss://stream.bybit.com/v5/public/spot":"wss://ws.okx.com:8443/ws/v5/public";
-  const subscriptions=exchange==="bybit"?Array.from({length:Math.ceil(pairs.length/10)},(_,index)=>({op:"subscribe",args:pairs.slice(index*10,index*10+10).map(pair=>`tickers.${pair.symbol}`)})):exchange==="okx"?[{op:"subscribe",args:pairs.map(pair=>({channel:"tickers",instId:pair.symbol}))}]:[];
-  return {url,subscriptions,ping:exchange==="bybit"?JSON.stringify({op:"ping"}):exchange==="okx"?"ping":undefined,decode(input:unknown,now=Date.now()):ComparisonQuote[]{
-    const root=object(input);if(root.event==="error"||root.success===false)throw new Error("Биржа отклонила подписку.");
-    const rows=exchange==="okx"?Array.isArray(root.data)?root.data:[]:[exchange==="binance"?object(root.data):object(root.data)];
-    const quotes:ComparisonQuote[]=[];
-    for(const raw of rows){
-      const data=object(raw),symbol=String(exchange==="binance"?data.s:exchange==="bybit"?data.symbol:data.instId),pair=bySymbol.get(symbol);
-      if(!pair)continue;
-      if(exchange==="bybit"&&(root.topic!==`tickers.${symbol}`||root.type!=="snapshot"))continue;
-      if(exchange==="okx"&&object(root.arg).channel!=="tickers")continue;
-      const timestamp=exchange==="bybit"?Number(root.ts):exchange==="okx"?Number(data.ts):now;
-      if(!Number.isFinite(timestamp)||Math.abs(now-timestamp)>15000)continue;
-      const bid=positive(exchange==="binance"?data.b:exchange==="bybit"?data.bid1Price:data.bidPx),ask=positive(exchange==="binance"?data.a:exchange==="bybit"?data.ask1Price:data.askPx);
-      if(bid===null||ask===null||bid>ask)continue;
-      quotes.push({exchange,asset:pair.baseAsset,symbol,bid,ask,bidSize:quantity(exchange==="binance"?data.B:exchange==="bybit"?data.bid1Size:data.bidSz),askSize:quantity(exchange==="binance"?data.A:exchange==="bybit"?data.ask1Size:data.askSz),last:positive(exchange==="bybit"?data.lastPrice:data.last),receivedAt:now,source:"ws"});
-    }
-    return quotes;
-  }};
+  const quote=(symbol:unknown,bidValue:unknown,askValue:unknown,bidSizeValue:unknown,askSizeValue:unknown,lastValue:unknown,now=Date.now()):ComparisonQuote[]=>{
+    const pair=typeof symbol==="string"?bySymbol.get(symbol):undefined,bid=positive(bidValue),ask=positive(askValue);
+    if(!pair||bid===null||ask===null||bid>ask)return [];
+    return [{exchange,asset:pair.baseAsset,symbol:pair.symbol,bid,ask,bidSize:quantity(bidSizeValue),askSize:quantity(askSizeValue),last:positive(lastValue),receivedAt:now,source:"ws"}];
+  };
+  const top=(input:unknown,side:"bid"|"ask")=>{
+    const levels=rows(input).map(row=>rows(row)).map(row=>({price:positive(row[0]),size:quantity(row[1])})).filter((row):row is {price:number;size:number|null}=>row.price!==null);
+    return levels.sort((a,b)=>side==="bid"?b.price-a.price:a.price-b.price)[0];
+  };
+  switch(exchange){
+    case "binance":return {url:"wss://data-stream.binance.vision:443/stream",subscriptions:[{method:"SUBSCRIBE",params:pairs.map(pair=>`${pair.symbol.toLowerCase()}@bookTicker`),id:1}],decode(input,now=Date.now()){const data=object(object(input).data);return quote(data.s,data.b,data.a,data.B,data.A,undefined,now);}};
+    case "bybit":return {url:"wss://stream.bybit.com/v5/public/spot",subscriptions:Array.from({length:Math.ceil(pairs.length/10)},(_,index)=>({op:"subscribe",args:pairs.slice(index*10,index*10+10).map(pair=>`orderbook.1.${pair.symbol}`)})),ping:{op:"ping"},decode(input,now=Date.now()){const root=object(input),data=object(root.data),topic=String(root.topic||""),prefix="orderbook.1.",symbol=topic.startsWith(prefix)?topic.slice(prefix.length):"",bid=top(data.b,"bid"),ask=top(data.a,"ask");return root.type==="snapshot"&&recent(root.ts,now)?quote(symbol,bid?.price,ask?.price,bid?.size,ask?.size,undefined,now):[];}};
+    case "okx":return {url:"wss://ws.okx.com:8443/ws/v5/public",subscriptions:[{op:"subscribe",args:pairs.map(pair=>({channel:"tickers",instId:pair.symbol}))}],ping:"ping",decode(input,now=Date.now()){const root=object(input),arg=object(root.arg);if(arg.channel!=="tickers")return [];return rows(root.data).flatMap(raw=>{const data=object(raw);return arg.instId===data.instId&&recent(data.ts,now)?quote(data.instId,data.bidPx,data.askPx,data.bidSz,data.askSz,data.last,now):[];});}};
+    case "bitget":return {url:"wss://ws.bitget.com/v2/ws/public",subscriptions:[{op:"subscribe",args:pairs.map(pair=>({instType:"SPOT",channel:"ticker",instId:pair.symbol}))}],ping:"ping",decode(input,now=Date.now()){const root=object(input),arg=object(root.arg);if(arg.channel!=="ticker"||arg.instType!=="SPOT")return [];return rows(root.data).flatMap(raw=>{const data=object(raw);return quote(arg.instId,data.bidPr??data.bid1Price,data.askPr??data.ask1Price,data.bidSz??data.bid1Size,data.askSz??data.ask1Size,data.lastPr??data.lastPrice,now);});}};
+    case "gate":return {url:"wss://api.gateio.ws/ws/v4/",subscriptions:[{time:Math.floor(Date.now()/1000),channel:"spot.book_ticker",event:"subscribe",payload:pairs.map(pair=>pair.symbol)}],ping:{channel:"spot.ping"},decode(input,now=Date.now()){const root=object(input),data=object(root.result);return root.channel==="spot.book_ticker"&&root.event==="update"?quote(data.s,data.b,data.a,data.B,data.A,undefined,now):[];}};
+    case "kraken":{const byWs=new Map(pairs.map(pair=>[`${pair.baseAsset}/${pair.quoteAsset}`,pair.symbol]));return {url:"wss://ws.kraken.com/v2",subscriptions:[...byWs.keys()].map(symbol=>({method:"subscribe",params:{channel:"ticker",symbol:[symbol],event_trigger:"bbo",snapshot:true}})),ping:{method:"ping"},decode(input,now=Date.now()){const root=object(input);return root.channel==="ticker"?rows(root.data).flatMap(raw=>{const data=object(raw);return quote(byWs.get(String(data.symbol)),data.bid,data.ask,data.bid_qty,data.ask_qty,data.last,now);}):[];}};}
+    case "coinbase":return {url:"wss://ws-feed.exchange.coinbase.com",subscriptions:[{type:"subscribe",product_ids:pairs.map(pair=>pair.symbol),channels:["ticker","heartbeat"]}],decode(input,now=Date.now()){const data=object(input);return data.type==="ticker"?quote(data.product_id,data.best_bid,data.best_ask,data.best_bid_size,data.best_ask_size,data.price,now):[];}};
+    case "kucoin":{if(!token)return undefined;const url=new URL(token.endpoint);url.search=new URLSearchParams({token:token.token,connectId:crypto.randomUUID()}).toString();return {url:url.href,subscriptions:[{id:crypto.randomUUID(),type:"subscribe",topic:`/market/ticker:${pairs.map(pair=>pair.symbol).join(",")}`,privateChannel:false,response:true}],ping:{id:"sinex-comparison",type:"ping"},pingMs:Math.min(15000,token.pingInterval*.7||15000),decode(input,now=Date.now()){const root=object(input),data=object(root.data),topic=String(root.topic||""),prefix="/market/ticker:",symbol=topic.startsWith(prefix)?topic.slice(prefix.length):"";return root.type==="message"&&root.subject==="trade.ticker"?quote(symbol,data.bestBid,data.bestAsk,data.bestBidSize,data.bestAskSize,data.price,now):[];}};}
+    case "bitfinex":{const channels=new Map<number,string>();return {url:"wss://api-pub.bitfinex.com/ws/2",subscriptions:pairs.map(pair=>({event:"subscribe",channel:"ticker",symbol:pair.symbol})),subscriptionIntervalMs:50,decode(input,now=Date.now()){const event=object(input);if(event.event==="subscribed"&&event.channel==="ticker"&&typeof event.chanId==="number"&&typeof event.symbol==="string")channels.set(event.chanId,event.symbol);const values=rows(input),symbol=channels.get(Number(values[0])),data=rows(values[1]);return data.length>=7?quote(symbol,data[0],data[2],data[1],data[3],data[6],now):[];}};}
+    case "htx":return {url:"wss://api.huobi.pro/ws",subscriptions:pairs.map(pair=>({sub:`market.${pair.symbol}.bbo`,id:pair.symbol})),subscriptionIntervalMs:100,binary:"gzip",reply(input){const root=object(input);return typeof root.ping==="number"?{pong:root.ping}:undefined;},decode(input,now=Date.now()){const root=object(input),data=object(root.tick);return root.ch===`market.${data.symbol}.bbo`?quote(data.symbol,data.bid,data.ask,data.bidSize,data.askSize,undefined,now):[];}};
+    case "mexc":return {url:"wss://wbs-api.mexc.com/ws",subscriptions:[{method:"SUBSCRIPTION",params:pairs.map(pair=>`spot@public.aggre.bookTicker.v3.api.pb@100ms@${pair.symbol}`)}],ping:{method:"PING"},binary:"protobuf",decode(input,now=Date.now()){if(!(input instanceof ArrayBuffer))return [];const wrapper=protobufFields(new Uint8Array(input)),payload=wrapper.get(315),symbol=text(wrapper.get(3));if(text(wrapper.get(1))!==`spot@public.aggre.bookTicker.v3.api.pb@100ms@${symbol}`||!(payload instanceof Uint8Array))return [];const data=protobufFields(payload);return quote(symbol,text(data.get(1)),text(data.get(3)),text(data.get(2)),text(data.get(4)),undefined,now);}};
+    case "whitebit":return {url:"wss://api.whitebit.com/ws",subscriptions:[{id:1,method:"bookTicker_subscribe",params:[]}],ping:{id:99,method:"ping",params:[]},pingMs:50000,decode(input,now=Date.now()){const root=object(input);return root.method==="bookTicker_update"?rows(root.params).flatMap(raw=>{const data=rows(raw);return quote(data[2],data[4],data[6],data[5],data[7],undefined,now);}):[];}};
+    case "cryptocom":return {url:"wss://stream.crypto.com/exchange/v1/market",subscribeDelayMs:1000,subscriptions:[{id:1,method:"subscribe",params:{channels:pairs.map(pair=>`ticker.${pair.symbol}`)},nonce:Date.now()}],reply(input){const root=object(input);return root.method==="public/heartbeat"?{id:root.id,method:"public/respond-heartbeat"}:undefined;},decode(input,now=Date.now()){const result=object(object(input).result);if(result.channel!=="ticker")return [];return rows(result.data).flatMap(raw=>{const data=object(raw);return result.instrument_name===data.i?quote(data.i,data.b,data.k,undefined,undefined,data.a,now):[];});}};
+    case "bingx":return {url:"wss://open-api-ws.bingx.com/market",subscriptions:pairs.map(pair=>({id:crypto.randomUUID(),reqType:"sub",dataType:`${pair.symbol}@depth20`})),binary:"gzip",reply(input){const root=object(input);return root.ping?{pong:root.ping,time:root.time}:undefined;},decode(input,now=Date.now()){const root=object(input),data=object(root.data),suffix="@depth20",dataType=String(root.dataType||"");if(!dataType.endsWith(suffix))return [];const bid=top(data.bids,"bid"),ask=top(data.asks,"ask");return quote(dataType.slice(0,-suffix.length),bid?.price,ask?.price,bid?.size,ask?.size,undefined,now);}};
+  }
 }

@@ -1,0 +1,244 @@
+---
+title: "WebSocket-котировки бирж: устройство и примеры"
+description: "Как Sinex получает лучшие Bid и Ask с публичных WebSocket, проверяет сообщения и переключается на REST при сбое потока."
+date: "2026-11-20"
+updated: "2026-11-20"
+author: "Команда Sinex"
+order: 4
+tags: ["WebSocket", "биржи", "TypeScript", "BBO"]
+related: ["exchanges", "market-data", "architecture"]
+sources:
+  - title: "Bybit WebSocket Orderbook"
+    url: "https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook"
+  - title: "Kraken WebSocket v2 Ticker"
+    url: "https://docs.kraken.com/api/docs/websocket-v2/ticker/"
+  - title: "KuCoin WebSocket Ticker"
+    url: "https://www.kucoin.com/docs-new/3470063w0"
+  - title: "WhiteBIT Public WebSocket API"
+    url: "https://github.com/whitebit-exchange/api-docs/blob/main/pages/public/websocket.mdx"
+---
+
+Страница «Цены на биржах» получает лучший Bid и Ask на сервере. Один коллектор на биржу обслуживает все открытые браузеры, поэтому каждый посетитель не создаёт ещё двадцать публичных подписок. REST остаётся резервным источником и способом получить точный каталог доступных пар.
+
+Основной код находится в трёх файлах:
+
+- `lib/market/comparison/protocol.ts` описывает адрес, подписки, heartbeat и декодер каждой биржи;
+- `lib/server/comparison-feed.ts` управляет соединением, переподключением, REST-резервом и общей подпиской клиентов;
+- `lib/market/comparison/model.ts` содержит единую модель котировки, проверку свежести и резервные обозначения символов.
+
+## Общий контракт
+
+Каждый декодер возвращает одну и ту же структуру. Числа проверяются до публикации: Bid и Ask должны быть положительными, конечными и не образовывать пересечённый рынок (`bid <= ask`). Сообщение неизвестного инструмента отбрасывается.
+
+```ts
+interface ComparisonQuote {
+  exchange: ExchangeId
+  asset: string
+  symbol: string
+  bid: number | null
+  ask: number | null
+  bidSize: number | null
+  askSize: number | null
+  last: number | null
+  receivedAt: number
+  source: "ws" | "rest"
+}
+```
+
+Протокол не открывает соединение сам. Он возвращает конфигурацию транспорта, а `VenueFeed` отвечает за жизненный цикл сокета:
+
+```ts
+const protocol = comparisonProtocol(exchange, pairs, kucoinToken)
+const ws = new WebSocket(protocol.url)
+
+ws.onopen = () => {
+  for (const message of protocol.subscriptions) {
+    ws.send(JSON.stringify(message))
+  }
+}
+
+ws.onmessage = async (event) => {
+  const input = typeof event.data === "string"
+    ? JSON.parse(event.data)
+    : event.data
+
+  for (const quote of protocol.decode(input)) {
+    quotes.set(quote.asset, quote)
+  }
+}
+```
+
+В рабочем коде дополнительно обрабатываются gzip, protobuf, heartbeat, тайм-аут отсутствия данных и экспоненциальное переподключение.
+
+## Binance
+
+Binance передаёт лучший уровень через `bookTicker`. Символ в имени потока записывается в нижнем регистре, а в сообщении приходит в нативном виде.
+
+```ts
+const subscription = {
+  method: "SUBSCRIBE",
+  params: ["btcusdt@bookTicker", "ethusdt@bookTicker"],
+  id: 1,
+}
+
+// { s: "BTCUSDT", b: "90000", B: "0.2", a: "90001", A: "0.3" }
+const bid = Number(message.data.b)
+const ask = Number(message.data.a)
+```
+
+Декодер обязательно сопоставляет `message.data.s` с каталогом подписанных пар. Одной проверки имени внешнего stream недостаточно.
+
+## Bybit
+
+Для Spot используется `orderbook.1`, а не канал `tickers`: у Spot ticker нет гарантированных полей лучшего Bid и Ask. Глубина 1 даёт готовый снимок верхнего уровня.
+
+```ts
+const subscription = {
+  op: "subscribe",
+  args: ["orderbook.1.BTCUSDT", "orderbook.1.ETHUSDT"],
+}
+
+// topic: "orderbook.1.BTCUSDT"
+// data: { b: [["90000", "0.2"]], a: [["90001", "0.3"]] }
+const symbol = message.topic.slice("orderbook.1.".length)
+const [bid, bidSize] = message.data.b[0]
+const [ask, askSize] = message.data.a[0]
+```
+
+Подписки формируются пакетами не более десяти тем. Декодер принимает только `snapshot` и проверяет серверную метку `ts`, чтобы старое сообщение не стало текущей ценой.
+
+## OKX и Bitget
+
+Обе биржи возвращают массив данных и отдельно описывают канал в `arg`. Нельзя декодировать массив, не проверив `channel`, `instType` и `instId`.
+
+```ts
+// OKX
+const okx = {
+  op: "subscribe",
+  args: [{ channel: "tickers", instId: "BTC-USDT" }],
+}
+
+const row = message.data[0]
+const quote = {
+  symbol: row.instId,
+  bid: Number(row.bidPx),
+  ask: Number(row.askPx),
+  bidSize: Number(row.bidSz),
+  askSize: Number(row.askSz),
+}
+
+// Bitget
+const bitget = {
+  op: "subscribe",
+  args: [{ instType: "SPOT", channel: "ticker", instId: "BTCUSDT" }],
+}
+```
+
+У OKX дополнительно проверяется `ts`. Текстовый `ping` отправляется транспортом по таймеру.
+
+## Gate и Kraken
+
+Gate использует `spot.book_ticker`, Kraken v2 — `ticker` с `event_trigger: "bbo"`. Gate получает один пакет нативных символов, а Kraken подписывается отдельным сообщением на каждую пару.
+
+```ts
+// Gate
+const gate = {
+  time: Math.floor(Date.now() / 1000),
+  channel: "spot.book_ticker",
+  event: "subscribe",
+  payload: ["BTC_USDT", "ETH_USDT"],
+}
+
+// Kraken WebSocket v2
+const kraken = {
+  method: "subscribe",
+  params: {
+    channel: "ticker",
+    symbol: ["BTC/USDT"],
+    event_trigger: "bbo",
+    snapshot: true,
+  },
+}
+```
+
+Kraken REST может называть ту же пару иначе. Карта `${baseAsset}/${quoteAsset} -> nativeSymbol` связывает WebSocket-имя с внутренним символом каталога.
+
+## KuCoin
+
+Перед подключением сервер запрашивает публичный token и endpoint. В сообщении ticker нет обязательного `data.symbol`: инструмент нужно извлекать из поля `topic`.
+
+```ts
+const subscription = {
+  id: crypto.randomUUID(),
+  type: "subscribe",
+  topic: "/market/ticker:BTC-USDT,ETH-USDT",
+  privateChannel: false,
+  response: true,
+}
+
+// topic: "/market/ticker:BTC-USDT"
+const prefix = "/market/ticker:"
+const symbol = message.topic.startsWith(prefix)
+  ? message.topic.slice(prefix.length)
+  : ""
+
+const bid = Number(message.data.bestBid)
+const ask = Number(message.data.bestAsk)
+```
+
+Интервал heartbeat берётся из ответа token endpoint и ограничивается безопасным значением на стороне приложения.
+
+## Двоичные и сжатые потоки
+
+MEXC передаёт BBO в protobuf, а HTX и BingX используют gzip. Транспорт сначала преобразует фрейм и только затем вызывает общий декодер.
+
+```ts
+if (protocol.binary === "gzip") {
+  const stream = new Blob([frame])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"))
+  input = JSON.parse(await new Response(stream).text())
+} else if (protocol.binary === "protobuf") {
+  input = frame // разбирается mexc-protobuf.ts
+}
+```
+
+Bitfinex сначала присылает `chanId`, который нужно связать с символом. WhiteBIT может подписаться на все `bookTicker` одним запросом. Crypto.com и HTX требуют ответа на серверный heartbeat.
+
+## Обозначения всех интеграций
+
+| Биржа | Канал BBO | Формат символа | Транспорт |
+| --- | --- | --- | --- |
+| Binance | `bookTicker` | `BTCUSDT` | JSON |
+| Bybit | `orderbook.1` | `BTCUSDT` | JSON |
+| OKX | `tickers` | `BTC-USDT` | JSON |
+| Bitget | `ticker` | `BTCUSDT` | JSON |
+| Gate | `spot.book_ticker` | `BTC_USDT` | JSON |
+| Kraken | `ticker`, `event_trigger: bbo` | `BTC/USDT` | JSON |
+| Coinbase | `ticker` | `BTC-USDT` | JSON |
+| KuCoin | `/market/ticker` | `BTC-USDT` | JSON + token |
+| Bitfinex | `ticker` | `tBTCUST` | JSON-массив |
+| HTX | `market.*.bbo` | `btcusdt` | gzip JSON |
+| MEXC | `aggre.bookTicker` | `BTCUSDT` | protobuf |
+| WhiteBIT | `bookTicker` | `BTC_USDT` | JSON-массив |
+| Crypto.com | `ticker.*` | `BTC_USDT` | JSON |
+| BingX | `depth20` | `BTC-USDT` | gzip JSON |
+
+## REST-резерв и восстановление
+
+WebSocket запускается сразу с детерминированными обозначениями популярных USDT-пар. Он больше не зависит от того, успел ли REST вернуть каталог. После успешного запроса резервные пары заменяются точными нативными символами биржи.
+
+Если свежих WebSocket-котировок нет, `VenueFeed` запрашивает REST ticker каждые пять секунд. WebSocket считается основным источником: более старый REST-ответ не может перезаписать свежий BBO. При рабочем потоке отдельная ошибка REST-каталога не переводит биржу в состояние «Источник недоступен».
+
+## Проверка новой интеграции
+
+Для каждого протокола тест должен подтверждать:
+
+1. правильный endpoint и payload подписки;
+2. сопоставление только подписанного нативного символа;
+3. корректные Bid, Ask и размеры верхнего уровня;
+4. отклонение пересечённого рынка и устаревшей метки времени;
+5. heartbeat и восстановление после закрытия соединения;
+6. REST-резерв без перезаписи более свежей WebSocket-котировки.
+
+Примеры декодеров и фикстуры всех 14 площадок находятся в `tests/price-comparison.test.ts`.
