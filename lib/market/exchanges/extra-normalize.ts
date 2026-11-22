@@ -1,4 +1,4 @@
-import {priceIncrement} from "../price-increment";
+import {instrumentMetadata} from "../instrument-metadata";
 import { z } from "zod";
 import { choosePairs } from "../exchange-config";
 import { normalizeCandles, normalizeTickerBatch } from "../normalize";
@@ -14,7 +14,7 @@ export function extraData(id: ExtraId, input: unknown) {
 }
 export function extraPairs(id: ExtraId, input: unknown,quoteFilter:string|null="USDT"): TradingPair[] {
   const pairs: TradingPair[] = [];
-  const add = (symbol: string, base: string, quote: string,metadata:Record<string,unknown>={}) => { if (quoteFilter===null||quote===quoteFilter) pairs.push({ exchange: id, marketType: "spot", symbol, baseAsset: base, quoteAsset: quote,...priceIncrement(id,metadata) }); };
+  const add = (symbol: string, base: string, quote: string,metadata:Record<string,unknown>={}) => { if (quoteFilter===null||quote===quoteFilter) pairs.push({ exchange: id, marketType: "spot", symbol, baseAsset: base, quoteAsset: quote,...instrumentMetadata(id,metadata) }); };
   if (id === "bitfinex") {
     const symbols = z.array(z.array(z.string())).parse(input)[0];
     for (const symbol of symbols) {

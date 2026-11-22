@@ -1,4 +1,4 @@
-import {priceIncrement} from "../price-increment";
+import {instrumentMetadata} from "../instrument-metadata";
 import { z } from "zod";
 import { MarketError } from "../errors";
 import { normalizeCandles, normalizeTickerBatch } from "../normalize";
@@ -23,7 +23,7 @@ export function foreignPairs(exchange: ExchangeId, input: unknown,quoteFilter:st
   const data = unwrap(exchange, input);
   const pairs: TradingPair[] = [];
   const add = (symbol: unknown, base: unknown, quote: unknown, active: boolean,metadata:Record<string,unknown>={}) => {
-    if (active && (quoteFilter===null||quote===quoteFilter)) pairs.push({ exchange, marketType: "spot", symbol: z.string().parse(symbol), baseAsset: z.string().parse(base), quoteAsset: z.string().parse(quote),...priceIncrement(exchange,metadata) });
+    if (active && (quoteFilter===null||quote===quoteFilter)) pairs.push({ exchange, marketType: "spot", symbol: z.string().parse(symbol), baseAsset: z.string().parse(base), quoteAsset: z.string().parse(quote),...instrumentMetadata(exchange,metadata) });
   };
   if (exchange === "kraken") {
     for (const [symbol, value] of Object.entries(record.parse(data))) {

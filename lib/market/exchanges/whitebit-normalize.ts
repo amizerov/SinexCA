@@ -1,4 +1,4 @@
-import {priceIncrement} from "../price-increment";
+import {instrumentMetadata} from "../instrument-metadata";
 import { z } from "zod";
 import { choosePairs } from "../exchange-config";
 import { normalizeCandles, normalizeTickerBatch } from "../normalize";
@@ -6,7 +6,7 @@ import type { TradingPair } from "../types";
 const record=z.record(z.string(),z.unknown());
 export function whitebitResult(input:unknown){const root=record.parse(input);if(root.success!==true)throw new Error("WhiteBIT API error");return root.result;}
 export function whitebitPairs(input:unknown,quoteFilter:string|null="USDT"):TradingPair[]{
-  return choosePairs(z.array(record).parse(input).filter(r=>r.type==="spot"&&r.tradesEnabled===true&&(quoteFilter===null||r.money===quoteFilter)&&r.delistedAt==null).map(r=>({exchange:"whitebit",marketType:"spot",symbol:z.string().parse(r.name),baseAsset:z.string().parse(r.stock),quoteAsset:z.string().parse(r.money),...priceIncrement("whitebit",r)})));
+  return choosePairs(z.array(record).parse(input).filter(r=>r.type==="spot"&&r.tradesEnabled===true&&(quoteFilter===null||r.money===quoteFilter)&&r.delistedAt==null).map(r=>({exchange:"whitebit",marketType:"spot",symbol:z.string().parse(r.name),baseAsset:z.string().parse(r.stock),quoteAsset:z.string().parse(r.money),...instrumentMetadata("whitebit",r)})));
 }
 export function whitebitCandles(input:unknown){return normalizeCandles(z.array(z.array(z.unknown())).parse(input).map(r=>[Number(r[0])*1000,r[1],r[3],r[4],r[2],r[5]]));}
 export function whitebitTickers(input:unknown,symbols:string[]){

@@ -1,14 +1,14 @@
 "use client";
 import { useEffect, useMemo, useState,useCallback,useRef } from "react";
 import Link from "next/link";
-import { SlidersHorizontal, ListOrdered,PanelRight,Activity,CircleHelp } from "lucide-react";
+import { Info, ListOrdered,PanelRight,Activity,CircleHelp } from "lucide-react";
 import { useMarketResource } from "@/hooks/use-market-resource";
 import { useMarketCandles } from "@/hooks/use-market-candles";
 import { useMarketTickers } from "@/hooks/use-market-tickers";
 import { CandlestickChart } from "./CandlestickChart";
 import { CoinIcon } from "./CoinIcon";
 import { CoinInfoDialog } from "./CoinInfoDialog";
-import {FuturesParametersDialog} from "./FuturesParametersDialog";
+import {ContractInfoDialog} from "./ContractInfoDialog";
 import {SocketConnectionDialog} from "./SocketConnectionDialog";
 import { OrderBookDialog } from "./OrderBookDialog";
 import { MarketsPanel } from "./MarketsPanel";
@@ -49,11 +49,11 @@ export function MarketDashboard() {
   const wide=useDockViewport();
   const mobile=useMobileViewport();
   const [orderDraft,setOrderDraft]=useState<(OrderDraft&{pair:TradingPair;ownerId:string|undefined})|null>(null);
-  const [futuresParameters,setFuturesParameters]=useState<string>();
+  const [contractInfo,setContractInfo]=useState<string>();
   const [socketIssue,setSocketIssue]=useState<{key:string;dismissed:boolean}>();
   const [connectionRevision,setConnectionRevision]=useState(0);
   const {workspace:{exchange,marketType,selected,quote:requestedQuote,selectedQuote,timeframe,orderBookOpen,marketsOpen,tradesOpen,marketPanel,tradesDocked,tradesSide},updateWorkspace,workspaceError,retryWorkspace}=useMarketWorkspace();
-  const setSelected=useCallback((pair:TradingPair)=>{setFuturesParameters(undefined);updateWorkspace({selected:pair.baseAsset,selectedQuote:pair.quoteAsset});},[updateWorkspace]);
+  const setSelected=useCallback((pair:TradingPair)=>{setContractInfo(undefined);updateWorkspace({selected:pair.baseAsset,selectedQuote:pair.quoteAsset});},[updateWorkspace]);
   const setTimeframe=(timeframe:Timeframe)=>updateWorkspace({timeframe});
   const setOrderBookOpen=(orderBookOpen:boolean)=>updateWorkspace({orderBookOpen});
   const config = EXCHANGES[exchange];
@@ -132,9 +132,10 @@ export function MarketDashboard() {
   function changeMarketType(next:MarketType){
     if(next===marketType)return;
     const nextExchange=next==="futures"&&!supportsFutures(exchange)?"binance":exchange;
-    setSearch("");setOrderDraft(null);setCoinInfoOpen(false);setFuturesParameters(undefined);
+    setSearch("");setCoinInfoOpen(false);setContractInfo(undefined);
     updateWorkspace({marketType:next,exchange:nextExchange,quote:next==="futures"?"USDT":requestedQuote,selectedQuote:next==="futures"?"USDT":selectedQuote,timeframe:marketTimeframe(nextExchange,next,timeframe)});
   }
+  function openInstrumentPicker(){updateWorkspace({marketsOpen:true});requestAnimationFrame(()=>{document.querySelector<HTMLButtonElement>('.saved-market-tabs button')?.click();document.querySelector<HTMLInputElement>('[aria-label="Поиск торговой пары"]')?.focus();});}
   const showOrderBook=orderBookOpen&&!mobile,showTrades=tradesOpen&&!mobile;
   const marketColumn=marketsOpen&&marketPanel.mode!=="floating",tradeColumn=showTrades&&tradesDocked&&wide;
   const markets=marketsOpen?<MarketsPanel inColumn={marketColumn} exchange={exchange} pairs={list} total={pairs.data?.length} selected={pair?.symbol} tickers={tickerMap} ticks={tickers.status==="live"?tickers.ticks:undefined}
@@ -164,7 +165,7 @@ export function MarketDashboard() {
       {!tradeColumn&&trades}
       <main className="main-content">
         <section className="asset-header" aria-label="Выбранная пара">
-          <div className="asset-identity"><button className="coin-info-trigger" onClick={()=>setCoinInfoOpen(true)} disabled={!pair} aria-label={`Информация о ${pair?.baseAsset||selected}`} title="Информация о монете"><CoinIcon asset={pair?.baseAsset || selected}/></button><div><div className="asset-name"><h1><button className="coin-name-trigger" onClick={()=>setCoinInfoOpen(true)} disabled={!pair} aria-label={`О монете ${pair?.baseAsset||selected}`}>{pair?.baseAsset || selected}<span>/{quote}</span></button></h1></div><p>{config.name} · {marketType==="futures"?`Фьючерсы · ${quote} Perpetual`:"Spot"}</p></div></div>
+          <div className="asset-identity"><button className="coin-info-trigger" onClick={()=>setCoinInfoOpen(true)} disabled={!pair} aria-label={`Информация о ${pair?.baseAsset||selected}`} title="Информация о монете"><CoinIcon asset={pair?.baseAsset || selected}/></button><div><div className="asset-name"><h1><button className="coin-name-trigger" onClick={openInstrumentPicker} disabled={!pair} aria-label="Выбрать инструмент">{pair?.baseAsset || selected}<span>/{quote}</span></button></h1><button className="instrument-info-button" disabled={!pair||!workspacePreferences.ready} onClick={()=>setContractInfo(contractKey)} aria-label={marketType==="futures"?"Информация о контракте":"Информация об инструменте"} title="Характеристики инструмента" aria-haspopup="dialog"><Info size={16}/></button></div><p>{config.name} · {marketType==="futures"?`Фьючерсы · ${quote} Perpetual`:"Spot"}</p></div></div>
           <div className={`price-summary ${staleTicker ? "stale" : ""}`}>
             <div className="main-price"><span className="price-label">Последняя цена</span><div className="price-line"><strong>{price(lastPrice)}</strong><span>{quote}</span></div></div>
             <div className="price-stat change-stat"><span>Изменение · 24ч</span><strong className={change == null ? "muted" : change < 0 ? "negative" : "positive"}>{percent(change)}</strong></div>
@@ -176,21 +177,21 @@ export function MarketDashboard() {
             <div className="timeframe-buttons" role="group" aria-label="Интервал свечей">{availableTimeframes.map(tf => <button key={tf} title={marketIntervalSpec(exchange,marketType,tf).computed?`${tf} · из часовых свечей`:tf==="1M"?"1 месяц":tf==="3M"?"3 месяца":tf} aria-pressed={timeframe === tf} className={timeframe === tf ? "active" : ""} onClick={() => setTimeframe(tf)}>{tf}</button>)}</div>
             <select className="timeframe-select" aria-label="Интервал свечей" value={timeframe} onChange={event=>setTimeframe(event.target.value as Timeframe)}>{availableTimeframes.map(tf=><option key={tf} value={tf}>{tf}{tf.endsWith("M")?" · мес.":""}{marketIntervalSpec(exchange,marketType,tf).computed?" · расчётный":""}</option>)}</select>
             <span className={`stream-pill ${live && !staleCandles ? "" : "waiting"}`} role="status" title={`${!live&&tradeConnected?"WebSocket подключён, новых сделок нет; ":""}Цена: ${live?"сделки WebSocket":"REST 5с"} · ${candleStream?"свечи WebSocket":"свечи REST 15с"} · статистика 24ч: REST 60с`}><span className="status-dot" /><span>{live && !staleCandles ? "Онлайн" : tradeConnected?"WS + REST · 5с":tickers.status === "connecting" ? "Подключение…" : "REST · 5с"}</span></span>
-            {marketType==="futures"&&<button className="button futures-parameters-button" disabled={!pair||!workspacePreferences.ready} onClick={()=>setFuturesParameters(contractKey)} title="Параметры фьючерса" aria-label="Параметры фьючерса" aria-haspopup="dialog"><SlidersHorizontal size={14}/><span>Параметры фьючерса</span></button>}
+            
             {!mobile&&!orderBookOpen&&<button className="button orderbook-button" disabled={!pair} onClick={()=>setOrderBookOpen(true)} aria-label="Показать стакан" title="Показать стакан"><ListOrdered size={14}/><span>Стакан</span></button>}
-            <button className="button demo-order-button" disabled={marketType==="futures"||!pair||!session||!lastPrice} onClick={()=>pair&&lastPrice&&setOrderDraft({pair,price:lastPrice,side:"buy",type:"limit",ownerId:session?.ownerId})} title="Создать тестовую заявку" aria-label="Создать тестовую заявку">＋<span>Заявка</span></button>
+            <button className="button demo-order-button" disabled={!pair||!session||!lastPrice||!workspacePreferences.ready} onClick={()=>pair&&lastPrice&&setOrderDraft({pair:structuredClone(pair),price:lastPrice,side:"buy",type:"limit",usePreferences:true,ownerId:session?.ownerId})} title="Новая заявка" aria-label="Новая заявка">＋<span>Новая заявка</span></button>
             {!marketsOpen&&<button className="button markets-toggle-button" onClick={()=>updateWorkspace({marketsOpen:true})} aria-label="Показать рынки" title="Показать список пар"><PanelRight size={14}/><span>Рынки</span></button>}
             {!mobile&&!tradesOpen&&<button className="button trades-toggle-button" disabled={!pair} onClick={()=>updateWorkspace({tradesOpen:true})} aria-label="Показать сделки" title="Показать сделки"><Activity size={14}/><span>Сделки</span></button>}
           </div>
-          <CandlestickChart marketType={marketType} contractSize={pair?.contractSize} quoteAsset={pair?.quoteAsset} fills={marketType==="spot"?chartTrades.fills:[]} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={marketType==="spot"?orders.data?.account.portfolio?.positions||[]:[]} orders={marketType==="spot"?orders.data?.orders||[]:[]} onOrder={marketType==="spot"?draft=>pair&&setOrderDraft({...draft,pair,ownerId:session?.ownerId}):undefined} tickPrice={lastPrice} key={`${workspacePreferences.settings.layoutGeneration}:${exchange}:${marketType}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} />
+          <CandlestickChart marketType={marketType} contractSize={pair?.contractSize} quoteAsset={pair?.quoteAsset} fills={marketType==="spot"?chartTrades.fills:[]} tradesError={chartTrades.error} tradesTruncated={chartTrades.truncated} positions={marketType==="spot"?orders.data?.account.portfolio?.positions||[]:[]} orders={marketType==="spot"?orders.data?.orders||[]:[]} onOrder={draft=>pair&&setOrderDraft({...draft,pair:structuredClone(pair),ownerId:session?.ownerId})} tickPrice={lastPrice} key={`${workspacePreferences.settings.layoutGeneration}:${exchange}:${marketType}:${pair?.symbol||selected}:${timeframe}`} preferences={preferences} history={market.history} exchange={exchange} exchangeName={config.name} candles={market.candles} symbol={pair?.symbol || selected} timeframe={timeframe} loading={market.loading} error={market.error || pairs.error} />
         </section>
         {marketType==="spot"&&<DemoOrdersPanel orders={orders} onSelect={order=>{setSearch("");updateWorkspace({exchange:order.exchange,marketType:"spot",selected:order.base,selectedQuote:order.quote,quote:order.quote,timeframe:marketTimeframe(order.exchange,"spot",timeframe)});}}/>}
       </main>
     </div>
-    {futuresParameters===contractKey&&pair&&marketType==="futures"&&<FuturesParametersDialog key={contractKey} pair={pair} ownerId={workspacePreferences.identity?.ownerId??"guest"} close={()=>setFuturesParameters(undefined)}/>}
+    {contractInfo===contractKey&&pair&&<ContractInfoDialog key={contractKey} pair={pair} close={()=>setContractInfo(undefined)}/>}
     {socketDisconnected&&socketIssue?.key===socketKey&&!socketIssue.dismissed&&<SocketConnectionDialog exchange={config.name} pair={`${pair?.baseAsset}/${quote}`} refresh={refresh} close={()=>setSocketIssue({key:socketKey,dismissed:true})}/>}
     {coinInfoOpen&&pair&&<CoinInfoDialog key={`${pair.exchange}:${pair.symbol}`} pair={pair} ticker={ticker} lastPrice={lastPrice} usdtUsdRate={usdtUsdRate} close={()=>setCoinInfoOpen(false)}/>}
-    {orderDraft&&orderDraft.ownerId===session?.ownerId&&<DemoOrderDialog key={`${session?.ownerId}:${orderDraft.pair.exchange}:${orderDraft.pair.symbol}`} pair={orderDraft.pair} draft={orderDraft} currentPrice={pair?.exchange===orderDraft.pair.exchange&&pair?.symbol===orderDraft.pair.symbol?lastPrice:undefined} orders={orders} close={()=>setOrderDraft(null)}/>}
+    {orderDraft&&orderDraft.ownerId===session?.ownerId&&<DemoOrderDialog key={`${session?.ownerId}:${orderDraft.pair.exchange}:${orderDraft.pair.marketType}:${orderDraft.pair.symbol}`} pair={orderDraft.pair} draft={orderDraft} currentPrice={pair?.exchange===orderDraft.pair.exchange&&pair?.marketType===orderDraft.pair.marketType&&pair?.symbol===orderDraft.pair.symbol?lastPrice:undefined} orders={orders} close={()=>setOrderDraft(null)}/>}
     <footer className="terminal-footer">
       <span>Sinex — криптовалютный терминал</span>
       <nav aria-label="Основные разделы"><Link href="/prices">Цены на биржах</Link><Link href="/help">Справка</Link><Link href="/learn">Обучение</Link><Link href="/developers">Разработчикам</Link><Link href="/blog">Блог</Link><Link href="/about">О проекте</Link></nav>

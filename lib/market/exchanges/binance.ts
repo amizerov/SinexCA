@@ -1,4 +1,4 @@
-import {priceIncrement} from "../price-increment";
+import {instrumentMetadata} from "../instrument-metadata";
 import "server-only";
 import { fetchJson } from "@/lib/server/fetch-json";
 import { marketCache } from "@/lib/server/cache";
@@ -22,7 +22,7 @@ export const binance: ExchangeAdapter = {
       const ai = preferred.indexOf(a.symbol), bi = preferred.indexOf(b.symbol);
       return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi) || a.symbol.localeCompare(b.symbol);
     });
-    return active.map(p => ({ exchange: "binance" as const, marketType: "spot" as const, symbol: p.symbol, baseAsset: p.baseAsset, quoteAsset: p.quoteAsset,...priceIncrement("binance",p) }));
+    return active.map(p => ({ exchange: "binance" as const, marketType: "spot" as const, symbol: p.symbol, baseAsset: p.baseAsset, quoteAsset: p.quoteAsset,...instrumentMetadata("binance",p) }));
   }),
   getTickers: symbols => {
     const sorted = [...new Set(symbols)].sort();

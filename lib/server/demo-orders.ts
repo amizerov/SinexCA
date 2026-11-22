@@ -8,6 +8,7 @@ import type {OrderBook} from "@/lib/market/orderbook/model";
 import {readChartFills,type ChartTradeScope} from "./paper-chart-trades";
 import {readPaperPortfolio} from "./paper-portfolio";
 import {EXCHANGES} from "@/lib/market/exchange-config";
+import {validateInstrumentOrder} from "@/lib/paper/order-draft";
 export class DemoOrders {
   constructor(private db:DatabaseSync){db.exec(`CREATE TABLE IF NOT EXISTS demo_orders(id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES paper_accounts(id),mutation_id TEXT NOT NULL,input TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(account_id,mutation_id)); CREATE TABLE IF NOT EXISTS demo_fills(id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES demo_orders(id),data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS demo_depth(market TEXT PRIMARY KEY,received_at INTEGER NOT NULL,data TEXT NOT NULL);`);}
   list(owner:string){const id=new PaperStore(this.db).read(owner).id;return this.byAccount(id);}
@@ -46,11 +47,13 @@ export class DemoOrders {
     this.db.prepare("INSERT INTO paper_ledger(id,account_id,currency,decimals,kind,available_delta,reserved_delta,available_after,reserved_after,mutation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(randomUUID(),o.accountId,currency,decimals,kind,availableDelta,reservedDelta,a,r,randomUUID(),Date.now());
   }
   create(owner:string,input:OrderInput,pair:TradingPair,reference:number,book:OrderBook){return this.transaction(()=>{
+    if(pair.marketType!=="spot")throw new PaperAccountError("Демо-торговля фьючерсами пока недоступна",400);
     const accountId=new PaperStore(this.db).read(owner).id;
     const existing=this.db.prepare("SELECT input,data FROM demo_orders WHERE account_id=? AND mutation_id=?").get(accountId,input.mutationId);
     if(existing){if(existing.input!==JSON.stringify(input))throw new PaperAccountError("Идентификатор уже использован другой заявкой",409);return JSON.parse(String(existing.data)) as DemoOrder;}
     if(this.byAccount(accountId).filter(isOpen).length>=50)throw new PaperAccountError("Допускается до 50 открытых заявок");
     const quantity=quantityAtoms(input.quantity),market=input.type.endsWith("market"),best=input.side==="buy"?book.asks[0]?.price:book.bids[0]?.price;
+    const invalid=validateInstrumentOrder(pair,input.quantity,market?(best??reference):input.limit!,market?undefined:input.limit);if(invalid)throw new PaperAccountError(invalid,400);
     if(pair.exchange!==input.exchange||pair.symbol!==input.symbol||book.exchange!==pair.exchange||book.symbol!==pair.symbol)throw new PaperAccountError("Данные относятся к другой паре");
     if(quantity%10**(8-paperDecimals(pair.baseAsset)))throw new PaperAccountError(`Количество ${pair.baseAsset}: не более ${paperDecimals(pair.baseAsset)} знаков`);
     if(!best||!Number.isFinite(reference)||reference<=0||Date.now()-book.receivedAt>5000||book.receivedAt>Date.now()+1000||book.exchangeTime!==null&&(Date.now()-book.exchangeTime>15000||book.exchangeTime>Date.now()+5000))throw new PaperAccountError("Нет свежих рыночных данных",503);

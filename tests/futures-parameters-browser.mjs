@@ -19,17 +19,19 @@ async function setup(fail=false){
 }
 try{
   const {context,page,errors}=await setup();
-  const trigger=page.getByRole("button",{name:"Параметры фьючерса",exact:true});
-  assert.equal(await page.locator(".timeframe-toolbar").getByRole("button",{name:"Обновить",exact:true}).count(),0);
-  await trigger.click();const dialog=page.getByRole("dialog",{name:"Параметры фьючерса",exact:true});
-  await dialog.getByLabel("Плечо, ×",{exact:true}).fill("5");await dialog.getByLabel("Режим маржи",{exact:true}).selectOption("cross");await dialog.getByLabel("Количество, BTC",{exact:true}).fill("0.003");await dialog.getByRole("button",{name:"Сохранить",exact:true}).click();
-  await trigger.click();assert.equal(await dialog.getByLabel("Плечо, ×",{exact:true}).inputValue(),"5");assert.equal(await dialog.getByLabel("Режим маржи",{exact:true}).inputValue(),"cross");await page.keyboard.press("Escape");await dialog.waitFor({state:"hidden"});
-  await page.locator("button.pair-select").filter({hasText:"ETH/USDT"}).click();await trigger.click();assert.equal(await dialog.getByLabel("Плечо, ×",{exact:true}).inputValue(),"1");await page.keyboard.press("Escape");
-  await page.reload();await trigger.click();await page.setViewportSize({width:390,height:844});
-  assert.equal(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);await mkdir(".qa",{recursive:true});await page.screenshot({path:".qa/futures-parameters-mobile.png"});await page.keyboard.press("Escape");
-  await page.getByRole("group",{name:"Тип рынка",exact:true}).getByRole("button",{name:"Спот",exact:true}).click();assert.equal(await trigger.count(),0);assert.equal(await page.locator(".timeframe-toolbar").getByRole("button",{name:"Обновить",exact:true}).count(),0);assert.deepEqual(errors,[]);await context.close();
-  const failed=await setup(true),issue=failed.page.getByRole("dialog",{name:"Ошибка подключения к WebSocket",exact:true});await issue.waitFor({timeout:20000});
-  assert.equal(await failed.page.locator(".timeframe-toolbar").getByRole("button",{name:"Обновить",exact:true}).count(),0);
-  const before=failed.attempts();await issue.getByRole("button",{name:"Обновить",exact:true}).click();await issue.waitFor({state:"hidden"});await failed.page.waitForTimeout(300);assert(failed.attempts()>before,"Refresh restarts WebSocket connections");assert.deepEqual(failed.errors,[]);await failed.context.close();
-  console.log("Futures parameters: saved per contract, mobile, spot visibility and WebSocket retry passed");
+  await page.locator('.instrument-info-button').click();
+  const info=page.locator('.contract-info-dialog');await info.waitFor();assert.equal(await info.locator('input,select').count(),0);await page.keyboard.press('Escape');
+  await page.locator('.timeframe-toolbar').getByRole('button',{name:'Новая заявка',exact:true}).click();
+  const form=page.locator('.new-order-dialog');await form.waitFor();
+  assert.equal(await form.locator('select').first().locator('option').count(),2);
+  await form.getByLabel('Лимитная цена, USDT',{exact:true}).fill('100');await form.getByLabel('Количество, BTC',{exact:true}).fill('2');await form.getByLabel('Плечо, ×',{exact:true}).fill('5');
+  await form.locator('.order-risk summary').click();await form.getByLabel('Stop Loss, USDT',{exact:true}).fill('90');await form.getByLabel('Take Profit, USDT',{exact:true}).fill('120');
+  assert.match(await form.locator('[data-order-notional]').innerText(),/200/);assert.match(await form.locator('[data-order-margin]').innerText(),/40/);assert.match(await form.locator('[data-order-risk]').innerText(),/20/);assert.match(await form.locator('[data-order-reward]').innerText(),/40/);
+  assert.equal(await form.locator('button[type=submit]').isDisabled(),true);
+  const left=await form.locator('.order-input-column').boundingBox(),right=await form.locator('.order-analysis-column').boundingBox();assert(right.x>left.x+left.width,'Desktop uses two columns');
+  await mkdir('.qa',{recursive:true});await page.screenshot({path:'.qa/order-two-columns-desktop.png'});
+  await page.locator('button.pair-select').filter({hasText:'ETH/USDT'}).dispatchEvent('click');assert.match(await form.locator('h2').innerText(),/BTC/);assert.equal(await form.getByLabel('Количество, BTC',{exact:true}).inputValue(),'2');
+  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);assert.equal(await form.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);const mobileLeft=await form.locator('.order-input-column').boundingBox(),mobileRight=await form.locator('.order-analysis-column').boundingBox();assert(Math.abs(mobileLeft.x-mobileRight.x)<2,'Mobile uses one column');await page.screenshot({path:'.qa/order-two-columns-mobile.png'});
+  await page.keyboard.press('Escape');assert.deepEqual(errors,[]);await context.close();
+  console.log('Order form: contract info, calculations, captured instrument, desktop columns and mobile passed');
 }finally{await browser.close();}

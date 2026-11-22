@@ -1,5 +1,4 @@
-import {z} from "zod";
-import type {ExchangeId,FuturesContractInfo,TradingPair} from "./types";
+import type {ExchangeId,FuturesContractInfo} from "./types";
 const object=(value:unknown):Record<string,unknown>=>value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
 const positive=(value:unknown)=>value!==""&&value!=null&&Number.isFinite(Number(value))&&Number(value)>0?Number(value):undefined;
 /** Contract constraints come from public instrument metadata, never from display precision. */
@@ -16,19 +15,13 @@ export function futuresContractInfo(exchange:ExchangeId,row:Record<string,unknow
   const minimum=positive(exchange==="binance"?lot.minQty:exchange==="bybit"?qty.minOrderQty:exchange==="bitget"?row.minTradeNum:exchange==="gate"?Number(row.order_size_min)*size:exchange==="kucoin"?Number(row.lotSize)*size:exchange==="mexc"?Number(row.minVol)*size:exchange==="whitebit"?row.minAmount:exchange==="coinbase"?Number(row.base_min_size)*size:exchange==="bingx"?row.tradeMinQuantity:undefined);
   const step=positive(exchange==="binance"?lot.stepSize:exchange==="bybit"?qty.qtyStep:exchange==="bitget"?row.sizeMultiplier:exchange==="kucoin"?Number(row.lotSize)*size:exchange==="mexc"?Number(row.volUnit)*size:exchange==="whitebit"?row.stepSize:exchange==="cryptocom"?row.qty_tick_size:exchange==="coinbase"?Number(row.base_increment)*size:undefined);
   if(minimum)info.minQuantity=minimum;if(step)info.quantityStep=step;
+  const settlement=row.settleCoin??row.settleCcy??row.settleCurrency??row.marginAsset;
+  if(typeof settlement==="string"&&settlement)info.settlementAsset=settlement;
+  const explicitSize=positive(row.ctVal??row.quanto_multiplier??row.contractSize??row.contract_size??row.multiplier??details.contract_size);
+  if(explicitSize){info.contractSize=explicitSize;info.contractSizeUnit=String(row.ctValCcy??row.baseCurrency??row.baseCoin??row.base_ccy??row.base??row.symbol??details.contract_root_unit??"");if(exchange==="coinbase")info.contractSizeUnit=String(details.contract_root_unit??"");if(exchange==="gate")info.contractSizeUnit=String(row.name??"").split("_")[0];if(info.contractSizeUnit==="XBT")info.contractSizeUnit="BTC";}
+  const maximum=positive(exchange==="binance"?lot.maxQty:exchange==="bybit"?qty.maxOrderQty:exchange==="gate"?Number(row.order_size_max)*size:exchange==="kucoin"?Number(row.maxOrderQty)*size:exchange==="mexc"?Number(row.maxVol)*size:exchange==="coinbase"?Number(row.base_max_size)*size:undefined);
+  if(maximum)info.maxQuantity=maximum;
+  const notional=positive(exchange==="bitget"?row.minTradeUSDT:exchange==="whitebit"?row.minTotal:exchange==="kucoin"?row.minFunds:undefined);
+  if(notional)info.minNotional=notional;
   return info;
-}
-
-const optionalAmount=z.string().max(40).refine(value=>value===""||Number.isFinite(Number(value))&&Number(value)>0,"Введите положительное число.");
-export const futuresPositionSchema=z.object({direction:z.enum(["long","short"]),margin:z.enum(["isolated","cross"]),leverage:z.number().finite().min(1).max(1000),quantity:optionalAmount,stopLoss:optionalAmount,takeProfit:optionalAmount}).strict();
-export type FuturesPositionSettings=z.infer<typeof futuresPositionSchema>;
-export const defaultFuturesPosition=():FuturesPositionSettings=>({direction:"long",margin:"isolated",leverage:1,quantity:"",stopLoss:"",takeProfit:""});
-export const futuresPositionKey=(owner:string,pair:TradingPair)=>`sinex:futures-position:v1:${owner}:${pair.exchange}:${pair.symbol}`;
-export function validateFuturesPosition(settings:unknown,pair:TradingPair){
-  const parsed=futuresPositionSchema.safeParse(settings);
-  if(!parsed.success)return "Проверьте числовые параметры позиции.";
-  const value=parsed.data,limits=pair.futuresInfo;
-  if(limits?.maxLeverage&&value.leverage>limits.maxLeverage)return `Максимальное плечо по данным биржи — ${limits.maxLeverage}×.`;
-  if(value.quantity){const quantity=Number(value.quantity);if(limits?.minQuantity&&quantity<limits.minQuantity)return `Минимальное количество — ${limits.minQuantity} ${pair.baseAsset}.`;if(limits?.quantityStep){const count=quantity/limits.quantityStep;if(Math.abs(count-Math.round(count))>1e-7*Math.max(1,Math.abs(count)))return `Шаг количества — ${limits.quantityStep} ${pair.baseAsset}.`;}}
-  return "";
 }
