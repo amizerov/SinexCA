@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 export function GET(request: Request) {
   return marketRoute(request, async () => {
     const query=parseQuery(marketListQuery,request);
-    return filterQuote(await getExchange(query.exchange).getPairs(),query.quote||EXCHANGES[query.exchange].quote);
+    return filterQuote(await getExchange(query.exchange,query.marketType).getPairs(),query.quote||EXCHANGES[query.exchange].quote);
   });
 }

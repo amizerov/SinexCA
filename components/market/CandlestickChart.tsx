@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import {createPortal} from "react-dom";
 import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode,LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp,type IPriceLine } from "lightweight-charts";
 import { Expand, Minimize, ScanLine, BarChart3,SlidersHorizontal,MapPin } from "lucide-react";
-import type { Candle, ExchangeId, Timeframe } from "@/lib/market/types";
+import type { Candle, ExchangeId, Timeframe,MarketType } from "@/lib/market/types";
 import { ChartDrawings } from "./ChartDrawings";
 import { useAccount } from "@/components/Account";
 import { price, compact } from "@/lib/market/format";
@@ -30,8 +30,8 @@ import {VolumeProfile} from "./VolumeProfile";
 import {LiquidityHeatmap} from "./LiquidityHeatmap";
 import {useWorkspacePreferences} from "@/hooks/use-workspace-preferences";
 
-interface Props { quoteAsset?:string; fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
-export function CandlestickChart({ quoteAsset,fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
+interface Props {marketType?:MarketType;contractSize?:number; quoteAsset?:string; fills?:DemoFill[];positions?:PaperPosition[];tradesError?:string;tradesTruncated?:boolean;orders?:DemoOrder[];onOrder?:(draft:OrderDraft)=>void;tickPrice?:number;preferences:ReturnType<typeof useIndicatorPreferences>;history:Candle[];candles: Candle[]; exchange: ExchangeId; exchangeName: string; symbol: string; timeframe: Timeframe; loading: boolean; error?: string }
+export function CandlestickChart({ marketType="spot",contractSize,quoteAsset,fills=[],positions=[],tradesError,tradesTruncated,orders,onOrder,tickPrice,preferences,history,candles, exchange, exchangeName, symbol, timeframe, loading, error }: Props) {
   const {session}=useAccount();
   const workspace=useWorkspacePreferences();
   const timeZone=useBrowserTimeZone();
@@ -56,7 +56,7 @@ export function CandlestickChart({ quoteAsset,fills=[],positions=[],tradesError,
   if(preferences.settings.profile.enabled)indicatorNames.push("Профиль объёма");
   if(workspace.settings.heatmap.enabled)indicatorNames.push("Ликвидность");
   const count=indicatorNames.length;
-  const vwap=useDailyVwap(exchange,symbol,timeframe,preferences.settings.vwap.enabled&&candles.length>0,history);
+  const vwap=useDailyVwap(exchange,symbol,timeframe,preferences.settings.vwap.enabled&&candles.length>0,history,marketType);
   useVwapSeries(chart,vwap.history,candles,timeframe,preferences.settings.vwap);
   useFloatingNotice(`vwap-history:${exchange}:${symbol}`,vwap.warning,{actionLabel:"Повторить",action:vwap.warning?vwap.refresh:undefined});
   const [hovered, setHovered] = useState<{ exchangeName: string; symbol: string; timeframe: Timeframe; candle: Candle }>();
@@ -163,7 +163,7 @@ export function CandlestickChart({ quoteAsset,fills=[],positions=[],tradesError,
       localization:{timeFormatter:formatters.timeFormatter},
     });
   },[timeframe,timeZone]);
-  useChartViewport(chart,candles,exchange+":spot:"+symbol+":"+timeframe);
+  useChartViewport(chart,candles,exchange+":"+marketType+":"+symbol+":"+timeframe);
 
   const executions=useExecutionMarkers(chart,series,fills,candles,exchange,symbol,timeframe,positions,showTrades);
   const tradesWarning=showTrades?(tradesError||(tradesTruncated?"Показаны последние 10 000 исполнений диапазона":executions.grouped.outside>0?`${executions.grouped.outside} исполнений без свечи в истории`:undefined)):undefined;
@@ -187,14 +187,14 @@ export function CandlestickChart({ quoteAsset,fills=[],positions=[],tradesError,
     <span className="sr-only" data-preferences-status={preferences.busy?"saving":"saved"}/>
     <div className="chart-canvas-wrap" onContextMenu={e=>{if(!onOrder||!series.current||!container.current||!candles.length)return;if((e.target as HTMLElement).closest("button,input,[data-drawing-id]"))return;const rect=container.current.getBoundingClientRect(),y=e.clientY-rect.top;if(y<0||y>(chart.current?.panes()[0]?.getHeight()??0))return;const p=series.current.coordinateToPrice(y);if(p===null||p<=0)return;e.preventDefault();setContext({x:Math.max(4,Math.min(e.clientX,window.innerWidth-245)),y:Math.max(4,Math.min(e.clientY,window.innerHeight-185)),price:Number(p.toPrecision(10))});}}>
       <div ref={container} className="chart-canvas" aria-label={`Свечной график ${symbol}, интервал ${timeframe}, время ${timeZone}`} role="img" />
-      {workspace.ready&&workspace.settings.heatmap.enabled&&<LiquidityHeatmap key={`${exchange}:${symbol}`} chart={chart} series={series} candles={candles} exchange={exchange} symbol={symbol} quoteAsset={quoteAsset} config={workspace.settings.heatmap}/>}
-      {preferences.settings.profile.enabled&&<VolumeProfile key={`${exchange}:${symbol}:${timeframe}`} chart={chart} series={series} candles={candles} history={history} exchange={exchange} symbol={symbol} timeframe={timeframe} config={preferences.settings.profile}/>}
+      {workspace.ready&&workspace.settings.heatmap.enabled&&<LiquidityHeatmap key={`${exchange}:${symbol}`} chart={chart} series={series} candles={candles} exchange={exchange} marketType={marketType} contractSize={contractSize} symbol={symbol} quoteAsset={quoteAsset} config={workspace.settings.heatmap}/>}
+      {preferences.settings.profile.enabled&&<VolumeProfile key={`${exchange}:${symbol}:${timeframe}`} chart={chart} series={series} candles={candles} history={history} exchange={exchange} marketType={marketType} symbol={symbol} timeframe={timeframe} config={preferences.settings.profile}/>}
       <span className="sr-only" data-execution-count={showTrades?executions.grouped.markers.length:0}>{showTrades?executions.grouped.markers.map(t=>`${t.side==="buy"?"Покупка":"Продажа"}: ${t.quantity} ${t.base}, цена ${t.price} ${t.quote}`).join("; "):"Метки сделок скрыты"}</span>
       {showTrades&&executions.tooltip&&<ExecutionTooltip {...executions.tooltip}/>}
       {showTrades&&executions.average!==undefined&&<div className="chart-entry-summary" data-entry-price={executions.average} title="Средняя себестоимость остатка с комиссией покупки. Пунктир — ориентир безубыточности с DEMO-комиссией продажи 0,1%. Процент сравнивает текущую цену с этим ориентиром, без оценки глубины стакана."><span>Вход {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:8}).format(executions.average)} {executions.quote}</span>{basisChange!==undefined&&<strong className={basisChange>=0?"positive":"negative"}>{basisChange>0?"+":""}{basisChange.toFixed(2)}%</strong>}</div>}
       {onOrder&&<DemoOrderMarkers chart={chart} series={series} container={container} orders={activeOrders} onInspect={order=>onOrder({order,price:order.limit??order.stop??tickPrice??1,side:order.side,type:order.type})}/>}
       {context&&createPortal(<div className="demo-chart-menu" role="menu" aria-label="Действия с ценой" style={{left:context.x,top:context.y}} onPointerDown={e=>e.stopPropagation()}>{(["buy","sell"] as const).map(side=><button role="menuitem" key={side} onClick={()=>{onOrder?.({side,price:context.price,type:"limit"});setContext(undefined);}}>{side==="buy"?"Купить":"Продать"} · Лимит</button>)}<button role="menuitem" onClick={()=>{onOrder?.({side:"buy",price:context.price,type:"stop_limit"});setContext(undefined);}}>Новая стоп-заявка…</button><button role="menuitem" onClick={()=>{void navigator.clipboard?.writeText(String(context.price));setContext(undefined);}}>Копировать цену</button></div>,document.body)}
-      {session&&<ChartDrawings key={`${session.ownerId}:${exchange}:spot:${symbol}`} ownerId={session.ownerId} scope={{ exchange, marketType: "spot", symbol }} chart={chart} series={series} candles={candles} />}
+      {session&&<ChartDrawings key={`${session.ownerId}:${exchange}:${marketType}:${symbol}`} ownerId={session.ownerId} scope={{ exchange, marketType, symbol }} chart={chart} series={series} candles={candles} />}
       {!candles.length && <div className="chart-overlay" role="status">{loading ? <><span className="loader" /><strong>Загружаем историю рынка</strong><span>История {exchangeName} Spot</span></> : <strong>{error ? "Нет данных для отображения" : "Выберите торговую пару"}</strong>}</div>}
     </div>
     <div className="chart-caption"><span title="Локальное время браузера. Начало и закрытие свечей определяет биржа.">Время: {timeZone} <span className="separator">/</span> {candles.length ? `${candles.length} свечей` : "Ожидание данных"}</span><a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Графики TradingView ↗</a></div>

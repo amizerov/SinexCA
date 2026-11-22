@@ -8,7 +8,7 @@ export const dynamic="force-dynamic";
 export const maxDuration=120;
 const query=candleQuery.refine(value=>isVwapTimeframe(value.timeframe),"Дневной VWAP доступен только на внутридневных интервалах.");
 export function GET(request:Request){return marketRoute(request,async()=>{
-  const {exchange,symbol,timeframe}=parseQuery(query,request);await validateSymbols(exchange,[symbol]);
-  const now=Math.floor(Date.now()/1000),adapter=getExchange(exchange);
-  return marketCache.get(`vwap:v1:${exchange}:spot:${symbol}:${timeframe}:${utcSession(now)}`,10000,()=>loadVwapSession(adapter.getCandles,symbol,timeframe,now,exchange==="htx"?2000:exchange==="kraken"?720:1000));
+  const {exchange,marketType,symbol,timeframe}=parseQuery(query,request);await validateSymbols(exchange,[symbol],marketType);
+  const now=Math.floor(Date.now()/1000),adapter=getExchange(exchange,marketType);
+  return marketCache.get(`vwap:v1:${exchange}:${marketType}:${symbol}:${timeframe}:${utcSession(now)}`,10000,()=>loadVwapSession(adapter.getCandles,symbol,timeframe,now,exchange==="htx"?2000:exchange==="kraken"?720:1000));
 });}

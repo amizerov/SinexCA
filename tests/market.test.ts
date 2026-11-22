@@ -37,7 +37,7 @@ test("candles: rejects non-finite values, negative volume and invalid OHLC", () 
   assert.throws(() => normalizeCandles([row(60000, "20")]));
 });
 test("query: defaults, valid intervals and strict parameter boundaries", () => {
-  assert.deepEqual(candleQuery.parse({ symbol: "BTCUSDT" }), { exchange: "binance", symbol: "BTCUSDT", timeframe: "1h", limit: 500 });
+  assert.deepEqual(candleQuery.parse({ symbol: "BTCUSDT" }), { exchange: "binance",marketType:"spot", symbol: "BTCUSDT", timeframe: "1h", limit: 500 });
   for (const limit of [0, 1001, 1.5, "NaN", ""]) assert.equal(candleQuery.safeParse({ symbol: "BTCUSDT", limit }).success, false);
   for (const symbol of ["../../secret", "https://example.com"]) assert.equal(candleQuery.safeParse({ symbol }).success, false);
   assert.equal(candleQuery.safeParse({ symbol: "BTCUSDT", timeframe: "5m" }).success, true);

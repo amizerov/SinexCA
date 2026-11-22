@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useMemo,useRef,useState,type RefObject} from "react";
 import type {IChartApi,ISeriesApi,UTCTimestamp} from "lightweight-charts";
-import type {Candle,ExchangeId} from "@/lib/market/types";
+import type {Candle,ExchangeId,MarketType} from "@/lib/market/types";
 import {HeatBook,HISTORY_MS,type HeatSlice,type HeatCell} from "@/lib/market/heatmap/book";
 import {HeatmapPrimitive,type HeatRect} from "@/lib/market/heatmap/primitive";
 import {loadHeatmap,saveHeatmap} from "@/lib/market/heatmap/storage";
@@ -13,15 +13,15 @@ import {SnapshotHeatmap,largestLiquidity} from "@/lib/market/heatmap/snapshots";
 import {LiquidityZones} from "./LiquidityZones";
 
 
-type Props={chart:RefObject<IChartApi|null>;series:RefObject<ISeriesApi<"Candlestick">|null>;candles:Candle[];exchange:string;symbol:string;quoteAsset?:string;config:HeatmapSettings};
+type Props={chart:RefObject<IChartApi|null>;series:RefObject<ISeriesApi<"Candlestick">|null>;candles:Candle[];exchange:string;marketType?:MarketType;contractSize?:number;symbol:string;quoteAsset?:string;config:HeatmapSettings};
 export function LiquidityHeatmap(props:Props){
   return props.config.source==="zones"?<LiquidityZones chart={props.chart} series={props.series} candles={props.candles} opacity={props.config.opacity}/>:<OrderBookHeatmap {...props}/>;
 }
-function OrderBookHeatmap({chart,series,candles,exchange,symbol,config}:Props){
+function OrderBookHeatmap({chart,series,candles,exchange,marketType="spot",contractSize,symbol,config}:Props){
 
 
-  const pair=useMemo(()=>({exchange:exchange as ExchangeId,marketType:"spot" as const,symbol,baseAsset:"",quoteAsset:""}),[exchange,symbol]);
-  const snapshot=useOrderBook(pair,exchange!=="binance"),snapshotRef=useRef(snapshot);
+  const pair=useMemo(()=>({exchange:exchange as ExchangeId,marketType,contractSize,symbol,baseAsset:"",quoteAsset:""}),[exchange,marketType,contractSize,symbol]);
+  const snapshot=useOrderBook(pair,exchange!=="binance"||marketType==="futures"),snapshotRef=useRef(snapshot);
   const [levels,setLevels]=useState<HeatCell[]>([]);
   useEffect(()=>{snapshotRef.current=snapshot;},[snapshot]);
   const primitive=useRef<HeatmapPrimitive|null>(null),latest=useRef({config,candles});
@@ -32,7 +32,7 @@ function OrderBookHeatmap({chart,series,candles,exchange,symbol,config}:Props){
     let stopped=false,socket:WebSocket|undefined,retry:ReturnType<typeof setTimeout>|undefined,frame=0;
     let slices:HeatSlice[]=[],book:HeatBook|undefined,lastEvent=0,lastSaved=0,saving=false,loaded=false,attempt=0,marginAdjusted=false;
     const snapshots=new SnapshotHeatmap();
-    let controller=new AbortController();const key=`${exchange}:spot:${symbol}`;
+    let controller=new AbortController();const key=`${exchange}:${marketType}:${symbol}`;
     const persist=async()=>{if(saving||!loaded)return;saving=true;try{await saveHeatmap(key,slices);}catch{if(!stopped)setStorageWarning("История не сохраняется: хранилище браузера недоступно");}finally{saving=false;}};
     const redraw=()=>{setSamples(slices.length);if(primitive.current){primitive.current.slices=slices;primitive.current.refresh();}};
     async function connect(){
@@ -63,7 +63,7 @@ function OrderBookHeatmap({chart,series,candles,exchange,symbol,config}:Props){
       if(stopped)return;const source=series.current,instance=chart.current;
       if(!source||!instance){frame=requestAnimationFrame(attach);return;}
       const layer=new HeatmapPrimitive(latest.current.config);layer.candles=latest.current.candles;primitive.current=layer;source.attachPrimitive(layer);
-      void loadHeatmap(key).then(history=>{if(!stopped){slices=history;redraw();}}).catch(()=>{if(!stopped)setStorageWarning("Сохранённая история недоступна");}).finally(()=>{if(!stopped){loaded=true;if(exchange==="binance")void connect();}});
+      void loadHeatmap(key).then(history=>{if(!stopped){slices=history;redraw();}}).catch(()=>{if(!stopped)setStorageWarning("Сохранённая история недоступна");}).finally(()=>{if(!stopped){loaded=true;if(exchange==="binance"&&marketType==="spot")void connect();}});
     }
     frame=requestAnimationFrame(attach);
     const timer=setInterval(()=>{
@@ -73,7 +73,7 @@ function OrderBookHeatmap({chart,series,candles,exchange,symbol,config}:Props){
         const scale=chart.current.timeScale(),range=scale.getVisibleLogicalRange(),last=scale.timeToIndex(Math.floor(now/1000) as UTCTimestamp,true);
         if(range&&last!==null){marginAdjusted=true;if(range.to>=Number(last)-1&&range.to<=Number(last)+.5)scale.setVisibleLogicalRange({from:range.from,to:Number(last)+Math.max(2,(range.to-range.from)*.08)});}
       }
-      if(exchange!=="binance"){
+      if(exchange!=="binance"||marketType==="futures"){
         const source=snapshotRef.current,data=source.book;
         if(loaded&&data&&data.exchange===exchange&&data.symbol===symbol&&now-data.receivedAt<=5000&&!document.hidden){
           const slice=snapshots.slice(data,now);slices=[...slices.filter(s=>s.time>=now-HISTORY_MS),slice].slice(-1800);redraw();setLevels(largestLiquidity(slice,latest.current.config.persistence));setStatus(source.mode==="ws"?"Онлайн · 20 уровней":"Снимки REST · 20 уровней");
@@ -87,7 +87,7 @@ function OrderBookHeatmap({chart,series,candles,exchange,symbol,config}:Props){
     const onHide=()=>{if(document.hidden)void persist();};document.addEventListener("visibilitychange",onHide);
     const chartRef=chart;
     return()=>{stopped=true;cancelAnimationFrame(frame);clearInterval(timer);clearTimeout(retry);controller.abort();if(socket){socket.onclose=null;socket.close();}document.removeEventListener("visibilitychange",onHide);void persist();const layer=primitive.current;if(layer?.attachedData&&chartRef.current===layer.attachedData.chart){layer.attachedData.series.detachPrimitive(layer);}primitive.current=null;};
-  },[chart,series,exchange,symbol]);
+  },[chart,series,exchange,marketType,symbol]);
   useEffect(()=>{
     const source=series.current,instance=chart.current;if(!source||!instance)return;
     const lines=levels.map(level=>source.createPriceLine({price:level.price,color:level.side==="bid"?"#6dbd8b":"#e7956a",lineWidth:1,lineStyle:2,axisLabelVisible:true,title:level.side==="bid"?"Лимитные покупки":"Лимитные продажи"}));

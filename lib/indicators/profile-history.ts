@@ -1,10 +1,11 @@
-import type {Candle,ExchangeId,Timeframe} from "@/lib/market/types";
-import {exchangeTimeframes,intervalSeconds} from "@/lib/market/intervals";
+import type {Candle,ExchangeId,Timeframe,MarketType} from "@/lib/market/types";
+import {intervalSeconds} from "@/lib/market/intervals";
+import {marketTimeframes} from "@/lib/market/market-type";
 import type {CandlePage} from "./vwap-history";
 export interface ProfileHistory {candles:Candle[];timeframe:Timeframe;from:number;to:number;complete:boolean;tick:number|null}
 /** Prefer fine candles; bound range loading to 10,000 candles and 20 serial pages. */
-export function profileTimeframe(exchange:ExchangeId,chart:Timeframe,span:number):Timeframe{
-  const candidates=exchangeTimeframes(exchange).filter(tf=>intervalSeconds(tf)<=Math.max(60,intervalSeconds(chart)));
+export function profileTimeframe(exchange:ExchangeId,chart:Timeframe,span:number,marketType:MarketType="spot"):Timeframe{
+  const candidates=marketTimeframes(exchange,marketType).filter(tf=>intervalSeconds(tf)<=Math.max(60,intervalSeconds(chart)));
   return candidates.find(tf=>intervalSeconds(tf)>=Math.min(60,intervalSeconds(chart))&&span/intervalSeconds(tf)<=9500)??candidates.at(-1)??chart;
 }
 export async function loadProfileHistory(loader:CandlePage,symbol:string,timeframe:Timeframe,from:number,to:number,pageSize=1000):Promise<ProfileHistory>{

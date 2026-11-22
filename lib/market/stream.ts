@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { finiteNumber } from "./schemas";
-import type { Candle, ExchangeId, StreamStatus, Timeframe } from "./types";
+import type { Candle, ExchangeId, StreamStatus, Timeframe,MarketType } from "./types";
 import { normalizeCandles } from "./normalize";
 import { subscribeExtraStream } from "./extra-streams";
 import { StreamHealth,streamFreshnessMs } from "./stream-health";
 import { INTERVAL_MINUTES,wsInterval } from "./intervals";
 import {venueCandleSettings,decodeVenueCandle} from "./venue-streams";
+import {subscribeFuturesCandles} from "./futures-candles";
+import {hasFuturesCandleStream} from "./market-type";
 
 const eventSchema = z.object({ e: z.literal("kline"), s: z.string(), k: z.object({
   t: z.number().int().nonnegative(), i: z.string(), o: finiteNumber, h: finiteNumber,
@@ -19,7 +21,7 @@ export function decodeKline(input: unknown, symbol: string, timeframe: Timeframe
   return { time: Math.floor(k.t / 1000), open: k.o, high: k.h, low: k.l, close: k.c, volume: k.v };
 }
 export interface CandleStreamOptions {
-  symbol: string; timeframe: Timeframe;
+  symbol: string; timeframe: Timeframe;marketType?:MarketType;contractSize?:number;
   wsSymbol?: string;
   onPrice?: (price: number) => void;
   onCandle: (candle: Candle) => void;
@@ -29,7 +31,7 @@ export interface CandleStreamOptions {
 }
 export interface CandleStreamAdapter { subscribe(options: CandleStreamOptions): () => void }
 export const binanceCandleStream: CandleStreamAdapter = {
-  subscribe({ symbol, timeframe, onCandle, onStatus, onReconnect,onConnection }) {
+  subscribe({ symbol, timeframe, marketType, onCandle, onStatus, onReconnect,onConnection }) {
     let stopped = false, attempts = 0, connectedBefore = false;
     let socket: WebSocket | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -37,7 +39,7 @@ export const binanceCandleStream: CandleStreamAdapter = {
     function connect() {
       if (stopped) return;
       onStatus(connectedBefore || attempts ? "reconnecting" : "connecting");
-      const ws = new WebSocket(`wss://data-stream.binance.vision:443/ws/${symbol.toLowerCase()}@kline_${timeframe}`);
+      const ws = new WebSocket(`${marketType==="futures"?"wss://fstream.binance.com/market":"wss://data-stream.binance.vision:443"}/ws/${symbol.toLowerCase()}@kline_${timeframe}`);
       socket = ws;
       const armWatchdog = () => {
         clearTimeout(watchdog);
@@ -77,11 +79,11 @@ export const binanceCandleStream: CandleStreamAdapter = {
 };
 
 const minutes=INTERVAL_MINUTES;
-export function streamSettings(exchange: ExchangeId, { symbol, timeframe, wsSymbol }: Pick<CandleStreamOptions, "symbol" | "timeframe" | "wsSymbol">):{url:string;message:Record<string,unknown>;ping?:string;subscribeDelayMs?:number;reply?:(input:unknown)=>unknown} {
+export function streamSettings(exchange: ExchangeId, { symbol, timeframe, wsSymbol,marketType }: Pick<CandleStreamOptions, "symbol" | "timeframe" | "wsSymbol" | "marketType">):{url:string;message:Record<string,unknown>;ping?:string;subscribeDelayMs?:number;reply?:(input:unknown)=>unknown} {
   const bar = wsInterval(exchange,timeframe);
   switch (exchange) {
     case "whitebit":case "cryptocom":return venueCandleSettings(exchange,{symbol,timeframe});
-    case "bybit": return { url: "wss://stream.bybit.com/v5/public/spot", message: { op: "subscribe", args: [`kline.${bar}.${symbol}`] }, ping: JSON.stringify({ op: "ping" }) };
+    case "bybit": return { url: marketType==="futures"?"wss://stream.bybit.com/v5/public/linear":"wss://stream.bybit.com/v5/public/spot", message: { op: "subscribe", args: [`kline.${bar}.${symbol}`] }, ping: JSON.stringify({ op: "ping" }) };
     case "okx": return { url: "wss://ws.okx.com:8443/ws/v5/business", message: { op: "subscribe", args: [{ channel: `candle${bar}`, instId: symbol }] }, ping: "ping" };
     case "bitget": return { url: "wss://ws.bitget.com/v2/ws/public", message: { op: "subscribe", args: [{ instType: "SPOT", channel: `candle${bar}`, instId: symbol }] }, ping: "ping" };
     case "gate": return { url: "wss://api.gateio.ws/ws/v4/", message: { time: Math.floor(Date.now() / 1000), channel: "spot.candlesticks", event: "subscribe", payload: [bar, symbol] } };
@@ -92,7 +94,7 @@ export function streamSettings(exchange: ExchangeId, { symbol, timeframe, wsSymb
   }
 }
 const envelope = z.record(z.string(), z.unknown());
-export function decodeForeignStream(exchange: ExchangeId, input: unknown, options: Pick<CandleStreamOptions, "symbol" | "timeframe" | "wsSymbol">): { candle?: Candle; price?: number } {
+export function decodeForeignStream(exchange: ExchangeId, input: unknown, options: Pick<CandleStreamOptions, "symbol" | "timeframe" | "wsSymbol" | "marketType">): { candle?: Candle; price?: number } {
   const x = envelope.parse(input), { symbol, timeframe, wsSymbol } = options;
   if(exchange==="whitebit"||exchange==="cryptocom")return {candle:decodeVenueCandle(exchange,input,options)};
   let rows: unknown[][] = [];
@@ -116,6 +118,7 @@ export function decodeForeignStream(exchange: ExchangeId, input: unknown, option
     const expected = z.array(envelope).parse(request.args)[0];
     if (!arg.success || arg.data.instId !== symbol || arg.data.channel !== expected.channel || !Array.isArray(x.data)) return {};
     rows = z.array(z.array(z.unknown())).parse(x.data);
+    if(exchange==="okx"&&options.marketType==="futures")rows=rows.map(row=>[...row.slice(0,5),row[6]]);
   } else if (exchange === "gate") {
     if (x.channel !== "spot.candlesticks" || x.event !== "update") return {};
     const r = envelope.parse(x.result);
@@ -128,6 +131,10 @@ export function decodeForeignStream(exchange: ExchangeId, input: unknown, option
   return { candle: normalizeCandles(rows).at(-1) };
 }
 export function subscribeMarketStream(exchange: ExchangeId, options: CandleStreamOptions): () => void {
+  if(options.marketType==="futures"){
+    if(!hasFuturesCandleStream(exchange)){options.onStatus("offline");return()=>{};}
+    if(["bitget","gate","htx","mexc","kucoin","bingx"].includes(exchange))return subscribeFuturesCandles(exchange,options);
+  }
   if(exchange!=="coinbase"&&!wsInterval(exchange,options.timeframe)){options.onStatus("offline");return()=>{};}
   const health=new StreamHealth(exchange);let status:StreamStatus="connecting",openedAt=0;
   const emit=(next:StreamStatus)=>{if(next!==status){status=next;options.onStatus(next);}};

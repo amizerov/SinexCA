@@ -2,15 +2,20 @@ import type {TradingPair} from "../types";
 import {object,makeBook,bookLevels,type OrderBook} from "./model";
 import {whitebitBookProtocol} from "./whitebit";
 import {cryptocomBookProtocol} from "./cryptocom";
+import {extraFuturesBookProtocol} from "./futures-protocols";
 export interface BookProtocol {url:string;subscriptions:unknown[];subscribeDelayMs?:number;ping?:unknown;pingMs?:number;reply?:(input:unknown)=>unknown;decode:(input:unknown)=>OrderBook|undefined}
-export const BOOK_STREAM_EXCHANGES=["binance","bybit","okx","gate","htx","kucoin","whitebit","cryptocom","bingx"];
+export const BOOK_STREAM_EXCHANGES=["binance","bybit","okx","bitget","gate","kraken","coinbase","kucoin","bitfinex","htx","mexc","whitebit","cryptocom","bingx"];
 export async function bookProtocol(pair:TradingPair,signal:AbortSignal):Promise<BookProtocol|undefined>{
-  const {exchange,symbol}=pair,book=(bids:unknown,asks:unknown,time?:unknown)=>makeBook(exchange,symbol,bids,asks,time);
+  if(pair.marketType==="futures"&&!["binance","bybit","okx"].includes(pair.exchange))return extraFuturesBookProtocol(pair,signal);
+  const {exchange,symbol}=pair,book=(bids:unknown,asks:unknown,time?:unknown)=>{
+    const scale=(rows:unknown)=>pair.marketType==="futures"&&pair.contractSize?bookLevels(rows).map(row=>[row.price,row.quantity*pair.contractSize!]):rows;
+    return makeBook(exchange,symbol,scale(bids),scale(asks),time);
+  };
   switch(exchange){
     case "whitebit":return whitebitBookProtocol(pair);
     case "cryptocom":return cryptocomBookProtocol(pair);
     case "bingx":return {url:"wss://open-api-ws.bingx.com/market",subscriptions:[{id:crypto.randomUUID(),reqType:"sub",dataType:`${symbol}@depth20`}],reply(input){const event=object(input);return event.ping?{pong:event.ping,time:event.time}:undefined;},decode(input){const event=object(input);if(event.dataType!==`${symbol}@depth20`)return;const data=object(event.data);return Array.isArray(data.bids)&&Array.isArray(data.asks)?book(data.bids,data.asks,data.T):undefined;}};
-    case "binance":return {url:`wss://data-stream.binance.vision/ws/${symbol.toLowerCase()}@depth20@100ms`,subscriptions:[],decode(input){const data=object(input);return data.lastUpdateId!=null?book(data.bids,data.asks):undefined;}};
+    case "binance":return {url:pair.marketType==="futures"?`wss://fstream.binance.com/public/ws/${symbol.toLowerCase()}@depth20@100ms`:`wss://data-stream.binance.vision/ws/${symbol.toLowerCase()}@depth20@100ms`,subscriptions:[],decode(input){const data=object(input);return pair.marketType==="futures"?data.e==="depthUpdate"&&data.s===symbol?book(data.b,data.a,data.E):undefined:data.lastUpdateId!=null?book(data.bids,data.asks):undefined;}};
     case "okx":return {url:"wss://ws.okx.com:8443/ws/v5/public",subscriptions:[{op:"subscribe",args:[{channel:"books5",instId:symbol}]}],ping:"ping",pingMs:15000,decode(input){const data=object(input),arg=object(data.arg);if(arg.channel!=="books5"||arg.instId!==symbol||data.action!=="snapshot")return;const item=object(Array.isArray(data.data)?data.data[0]:null);return book(item.bids,item.asks,item.ts);}};
     case "gate":return {url:"wss://api.gateio.ws/ws/v4/",subscriptions:[{time:Math.floor(Date.now()/1000),channel:"spot.order_book",event:"subscribe",payload:[symbol,"20","100ms"]}],ping:{channel:"spot.ping"},decode(input){const data=object(input),item=object(data.result);return data.channel==="spot.order_book"&&data.event==="update"&&item.s===symbol?book(item.bids,item.asks,item.t):undefined;}};
     case "htx":return {url:"wss://api.huobi.pro/ws",subscriptions:[{sub:`market.${symbol}.depth.step0`,id:"sinex-depth"}],reply(input){const data=object(input);return typeof data.ping==="number"?{pong:data.ping}:undefined;},decode(input){const data=object(input),tick=object(data.tick);return data.ch===`market.${symbol}.depth.step0`?book(tick.bids,tick.asks,data.ts):undefined;}};
@@ -26,7 +31,7 @@ export async function bookProtocol(pair:TradingPair,signal:AbortSignal):Promise<
 /** A fresh instance per connection: deltas never use a REST or previous-connection snapshot. */
 export function bybitBookProtocol(pair:TradingPair):BookProtocol{
   let ready=false,lastUpdate=0;const bids=new Map<number,number>(),asks=new Map<number,number>();
-  return {url:"wss://stream.bybit.com/v5/public/spot",subscriptions:[{op:"subscribe",args:[`orderbook.50.${pair.symbol}`]}],ping:{op:"ping"},pingMs:15000,decode(input){
+  return {url:pair.marketType==="futures"?"wss://stream.bybit.com/v5/public/linear":"wss://stream.bybit.com/v5/public/spot",subscriptions:[{op:"subscribe",args:[`orderbook.50.${pair.symbol}`]}],ping:{op:"ping"},pingMs:15000,decode(input){
     const data=object(input),item=object(data.data);if(data.topic!==`orderbook.50.${pair.symbol}`||item.s!==pair.symbol)return;
     if(data.type!=="snapshot"&&data.type!=="delta")return;
     const update=Number(item.u);if(!Number.isSafeInteger(update)||update<1)throw new Error("Invalid Bybit sequence");

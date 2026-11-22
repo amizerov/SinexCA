@@ -2,7 +2,7 @@ import { z } from "zod";
 import { EXCHANGE_IDS } from "@/lib/market/exchange-config";
 import { symbolSchema } from "@/lib/market/schemas";
 
-export const drawingScopeSchema = z.object({ exchange: z.enum(EXCHANGE_IDS), marketType: z.literal("spot").default("spot"), symbol: symbolSchema });
+export const drawingScopeSchema = z.object({ exchange: z.enum(EXCHANGE_IDS), marketType: z.enum(["spot","futures"]).default("spot"), symbol: symbolSchema });
 export const levelSchema = z.object({
   id:z.uuid(),price:z.number().finite().positive().max(1e12),color:z.string().regex(/^#[0-9a-fA-F]{6}$/),
   type:z.enum(["horizontal","trend"]).optional(),startTime:z.number().int().nonnegative().max(32503680000).optional(),endTime:z.number().int().nonnegative().max(32503680000).optional(),endPrice:z.number().finite().positive().max(1e12).optional(),

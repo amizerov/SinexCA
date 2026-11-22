@@ -2,9 +2,9 @@ import type { MarketResponse } from "./types";
 export class ApiError extends Error {
   constructor(message: string, public code: string, public status: number) { super(message); }
 }
-export async function getMarket<T>(url: string, signal: AbortSignal): Promise<T> {
+export async function getMarket<T>(url: string, signal: AbortSignal,timeoutMs=15000): Promise<T> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]), cache: "no-store" });
+    const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]), cache: "no-store" });
     let json;
     try { json = await response.json(); }
     catch { throw new ApiError("Сервер вернул некорректный ответ. Повторите загрузку.", "INVALID_RESPONSE", response.status); }

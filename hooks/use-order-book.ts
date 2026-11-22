@@ -15,7 +15,7 @@ export function useOrderBook(pair:TradingPair,enabled=true){
         if(controller.signal.aborted)return;
         if(lastWs&&Date.now()-lastWs<5000)return;
         const version=wsVersion;
-        const response=await fetch(`/api/market/orderbook?${new URLSearchParams({exchange:pair.exchange,symbol:pair.symbol})}`,{cache:"no-store",signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});
+        const response=await fetch(`/api/market/orderbook?${new URLSearchParams({exchange:pair.exchange,marketType:pair.marketType,symbol:pair.symbol})}`,{cache:"no-store",signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});
         const json=await response.json();
         if(!response.ok){delay=Math.min(60000,Math.max(2000,Number(response.headers.get("Retry-After"))*1000||0));throw new Error(json.error?.message||"Не удалось загрузить стакан.");}
         const data=json.data as OrderBook;

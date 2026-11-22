@@ -13,7 +13,7 @@ export const indicatorOverridesSchema=z.object({ema0:average.optional(),ema1:ave
   }
 });
 export type IndicatorOverrides=z.infer<typeof indicatorOverridesSchema>;
-export const indicatorScopeSchema=z.object({exchange:z.enum(EXCHANGE_IDS),marketType:z.literal("spot"),symbol:symbolSchema}).strict();
+export const indicatorScopeSchema=z.object({exchange:z.enum(EXCHANGE_IDS),marketType:z.enum(["spot","futures"]),symbol:symbolSchema}).strict();
 export type IndicatorScope=z.infer<typeof indicatorScopeSchema>;
 export const indicatorScopeKey=(scope:IndicatorScope)=>JSON.stringify([scope.exchange,scope.marketType,scope.symbol]);
 const scopeKeySchema=z.string().max(160).refine(value=>{try{const [exchange,marketType,symbol]=JSON.parse(value);return indicatorScopeSchema.safeParse({exchange,marketType,symbol}).success&&value===indicatorScopeKey({exchange,marketType,symbol});}catch{return false;}},"Invalid indicator scope");

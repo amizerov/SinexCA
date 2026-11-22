@@ -24,7 +24,7 @@ export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=f
   const dock=useOrderBookDock(settings.tradesWidth,width=>preferences.update({tradesWidth:width}),260,480),docked=settings.tradesDocked&&dock.wide;
   const placement=usePanelDock();
   const side=settings.tradesSide==="auto"?(settings.marketPanel.mode==="left"?"left":"right"):settings.tradesSide;
-  const mine=settings.tradesTab==="mine",close=()=>preferences.update({tradesOpen:false});
+  const activeTab=pair.marketType==="futures"?"all":settings.tradesTab,mine=activeTab==="mine",close=()=>preferences.update({tradesOpen:false});
   const byOrder=new Map(demo?.orders.map(o=>[o.id,o]));
   const own=demo?.fills.filter(f=>{const o=byOrder.get(f.orderId);return (f.exchange??o?.exchange)===pair.exchange&&(f.symbol??o?.symbol)===pair.symbol;}).map(f=>({id:f.id,price:f.price,quantity:f.quantity/ATOMS,time:f.receivedAt,side:f.side??byOrder.get(f.orderId)?.side}))||[];
   const rows=mine?own:trades.map((t,i)=>({...t,id:t.id??`${t.time}:${t.receivedAt}:${i}`}));
@@ -42,8 +42,8 @@ export function TradesPanel({pair,trades,status,connection,demo,error,inColumn=f
       <TradesPlacementMenu/>
       <button onClick={close} aria-label="Закрыть сделки"><X size={15}/></button>
     </header>
-    <div className="trades-tabs" role="tablist" aria-label="Источник сделок" onKeyDown={e=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(e.key))return;e.preventDefault();const next=e.key==="Home"?"all":e.key==="End"?"mine":mine?"all":"mine";preferences.update({tradesTab:next});e.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();}}>{(["all","mine"] as const).map(tab=><button key={tab} id={`${tabs}-${tab}`} data-tab={tab} role="tab" aria-selected={settings.tradesTab===tab} aria-controls={panel} tabIndex={settings.tradesTab===tab?0:-1} onClick={()=>preferences.update({tradesTab:tab})}>{tab==="all"?"Все":"Мои"}</button>)}<span title={context}>{EXCHANGES[pair.exchange].name} · {pair.quoteAsset}</span></div>
-    <div className="trades-content" role="tabpanel" id={panel} aria-labelledby={`${tabs}-${settings.tradesTab}`}>
+    <div className="trades-tabs" role="tablist" aria-label="Источник сделок" onKeyDown={e=>{if(pair.marketType==="futures"||!["ArrowLeft","ArrowRight","Home","End"].includes(e.key))return;e.preventDefault();const next=e.key==="Home"?"all":e.key==="End"?"mine":mine?"all":"mine";preferences.update({tradesTab:next});e.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();}}>{(["all","mine"] as const).filter(tab=>pair.marketType!=="futures"||tab==="all").map(tab=><button key={tab} id={`${tabs}-${tab}`} data-tab={tab} role="tab" aria-selected={activeTab===tab} aria-controls={panel} tabIndex={activeTab===tab?0:-1} onClick={()=>preferences.update({tradesTab:tab})}>{tab==="all"?"Все":"Мои"}</button>)}<span title={context}>{EXCHANGES[pair.exchange].name} · {pair.quoteAsset}</span></div>
+    <div className="trades-content" role="tabpanel" id={panel} aria-labelledby={`${tabs}-${activeTab}`}>
       {!mine&&!live&&<p className="trades-notice" role="status">{quiet?"Новых сделок пока нет":status==="connecting"||status==="reconnecting"?"Подключение…":"Нет свежего потока сделок"}</p>}
       <div className="trades-columns" aria-hidden="true"><span>Цена <small>{pair.quoteAsset}</small></span><span>Кол-во <small>{pair.baseAsset}</small></span><span>Время</span></div>
       <div className="trades-scroll" role="table" aria-label={mine?"Мои тестовые сделки":"Рыночные сделки"}>

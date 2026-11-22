@@ -1,16 +1,17 @@
 import { z } from "zod";
 import { TIMEFRAMES } from "./types";
 import { EXCHANGE_IDS } from "./exchange-config";
-import { EXCHANGE_INTERVALS } from "./intervals";
+import {marketTimeframes} from "./market-type";
 
 export const symbolSchema = z.string().max(40).regex(/^[A-Za-z0-9]+(?:[-_:][A-Za-z0-9]+)*$/, "Некорректное обозначение торговой пары");
-export const exchangeQuery = z.object({ exchange: z.enum(EXCHANGE_IDS).default("binance") });
+export const marketTypeSchema=z.enum(["spot","futures"]);
+export const exchangeQuery = z.object({ exchange: z.enum(EXCHANGE_IDS).default("binance"),marketType:marketTypeSchema.default("spot") });
 export const marketListQuery=exchangeQuery.extend({quote:z.string().max(30).regex(/^(all|[A-Z0-9]+)$/).optional()});
 export const candleQuery = exchangeQuery.extend({
   symbol: symbolSchema,
   timeframe: z.enum(TIMEFRAMES).default("1h"),
   limit: z.coerce.number().int().min(1).max(1000).default(500),
-}).refine(query=>!!EXCHANGE_INTERVALS[query.exchange][query.timeframe],{message:"Этот интервал недоступен на выбранной бирже.",path:["timeframe"]});
+}).refine(query=>marketTimeframes(query.exchange,query.marketType).includes(query.timeframe),{message:"Этот интервал недоступен на выбранной бирже.",path:["timeframe"]});
 export const tickerQuery = exchangeQuery.extend({
   symbols: z.string().max(850).transform(s => s.split(",")).pipe(z.array(symbolSchema).min(1).max(20)).transform(s => [...new Set(s)]),
 });

@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useRef,useState,type RefObject} from "react";
 import {type IChartApi,type ISeriesApi,type ISeriesPrimitive,type IPrimitivePaneRenderer,type IPrimitivePaneView,type SeriesAttachedParameter,type Time} from "lightweight-charts";
-import type {Candle,ExchangeId,Timeframe} from "@/lib/market/types";
+import type {Candle,ExchangeId,Timeframe,MarketType} from "@/lib/market/types";
 import {intervalSeconds} from "@/lib/market/intervals";
 import {mergeCandles} from "@/lib/market/normalize";
 import type {IndicatorSettings} from "@/lib/indicators/settings";
@@ -43,14 +43,14 @@ export class ProfilePrimitive implements ISeriesPrimitive<Time>{
     });
   }
 }
-interface Props {chart:RefObject<IChartApi|null>;series:RefObject<ISeriesApi<"Candlestick">|null>;candles:Candle[];history:Candle[];exchange:ExchangeId;symbol:string;timeframe:Timeframe;config:Config}
-export function VolumeProfile({chart,series,candles,history,exchange,symbol,timeframe,config}:Props){
+interface Props {chart:RefObject<IChartApi|null>;series:RefObject<ISeriesApi<"Candlestick">|null>;candles:Candle[];history:Candle[];exchange:ExchangeId;marketType?:MarketType;symbol:string;timeframe:Timeframe;config:Config}
+export function VolumeProfile({chart,series,candles,history,exchange,marketType="spot",symbol,timeframe,config}:Props){
   const [range,setRange]=useState<{from:number;to:number}>(),[clock,setClock]=useState(()=>Math.floor(Date.now()/1000));
   const [state,setState]=useState<{key:string;data?:ProfileHistory;error?:string}>();
   const primitive=useRef<ProfilePrimitive|null>(null);
   const step=intervalSeconds(timeframe),day=Math.max(utcSession(clock),utcSession(candles.at(-1)?.time??clock));
   const from=config.period==="day"?day:range?.from,to=config.period==="day"?day+86400:range?.to;
-  const key=`${exchange}:${symbol}:${timeframe}:${config.period}:${from}:${to}`;
+  const key=`${exchange}:${marketType}:${symbol}:${timeframe}:${config.period}:${from}:${to}`;
   useEffect(()=>{
     let instance:IChartApi|null=null,timer:ReturnType<typeof setTimeout>|undefined;
     const owns=()=>chart.current===instance;
@@ -63,7 +63,7 @@ export function VolumeProfile({chart,series,candles,history,exchange,symbol,time
     if(from===undefined||to===undefined||!candles.length)return;
     const controller=new AbortController();let busy=false;
     async function load(){if(document.hidden||busy)return;busy=true;try{
-      const response=await fetch(`/api/market/volume-profile?${new URLSearchParams({exchange,symbol,timeframe,from:String(from),to:String(to)})}`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(120000)]),cache:"no-store"}),json=await response.json();
+      const response=await fetch(`/api/market/volume-profile?${new URLSearchParams({exchange,marketType,symbol,timeframe,from:String(from),to:String(to)})}`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(120000)]),cache:"no-store"}),json=await response.json();
       if(!response.ok)throw new Error(json.error?.message||"Не удалось загрузить профиль объёма.");
       if(!json.data||!Array.isArray(json.data.candles))throw new Error("Некорректные данные профиля.");
       if(!controller.signal.aborted)setState({key,data:json.data});
@@ -71,7 +71,7 @@ export function VolumeProfile({chart,series,candles,history,exchange,symbol,time
     const delay=setTimeout(()=>void load(),350),timer=setInterval(()=>void load(),15000);
     const visible=()=>{if(!document.hidden)void load();};document.addEventListener("visibilitychange",visible);
     return()=>{controller.abort();clearTimeout(delay);clearInterval(timer);document.removeEventListener("visibilitychange",visible);};
-  },[exchange,symbol,timeframe,from,to,key,candles.length,config.period]);
+  },[exchange,marketType,symbol,timeframe,from,to,key,candles.length,config.period]);
   const current=state?.key===key?state:undefined,data=current?.data;
   const validTick=!!data?.tick&&Number.isFinite(data.tick)&&data.tick>0;
   const usable=!!data&&validTick&&(config.period!=="day"||data.complete);

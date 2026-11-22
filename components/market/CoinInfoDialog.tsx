@@ -41,7 +41,7 @@ export function CoinInfoDialog({pair,ticker,lastPrice,usdtUsdRate,close}:{pair:T
     <button className="account-close" onClick={close} aria-label="Закрыть информацию о монете"><X size={18}/></button>
     <div className="coin-info-heading"><CoinIcon asset={pair.baseAsset}/><div><h2 id="coin-info-title">{info?.name||coinNames[pair.baseAsset]||pair.baseAsset}</h2><span>{pair.baseAsset}{info?.rank?` · №${info.rank} по капитализации`:""}</span></div></div>
     {info&&info.contracts.length>0&&<section className="coin-info-section coin-info-contracts-pinned" aria-label="Контракты по сетям"><h3>Контракты по сетям</h3><dl className="coin-info-contracts">{info.contracts.map(contract=><div key={`${contract.network}:${contract.address}`}><dt>{contract.network}</dt><dd><code>{contract.address}</code></dd></div>)}</dl></section>}
-    <section className="coin-info-section"><h3>{EXCHANGES[pair.exchange].name} · {pair.baseAsset}/{pair.quoteAsset} · Spot</h3>
+    <section className="coin-info-section"><h3>{EXCHANGES[pair.exchange].name} · {pair.baseAsset}/{pair.quoteAsset} · {pair.marketType==="futures"?"Фьючерсы":"Spot"}</h3>
       <dl className="coin-info-metrics">
         {metric("Последняя цена",`${price(lastPrice)} ${pair.quoteAsset}`)}
         {metric("Изменение за 24ч",percent(ticker?.priceChangePercent24h))}

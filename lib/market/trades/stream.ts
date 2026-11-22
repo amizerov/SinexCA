@@ -2,6 +2,7 @@ import type {ExchangeId,TradingPair,StreamStatus} from "../types";
 import {tradeFactories} from "./registry";
 import {record,type TradeTick} from "./types";
 import {tradeWatchdog} from "./health";
+import {futuresTrades} from "./futures";
 export interface TradeConnection {connected:boolean;subscribed:boolean}
 export interface TradeStreamOptions {onTicks:(ticks:TradeTick[])=>void;onTrades?:(ticks:TradeTick[])=>void;onStatus:(status:StreamStatus)=>void;onReconnect?:()=>void;onConnection?:(connection:TradeConnection)=>void}
 /** Trade subscription for the supplied instruments; the terminal supplies only its selected pair. */
@@ -26,7 +27,8 @@ export function subscribeTrades(exchange:ExchangeId,pairs:TradingPair[],options:
   async function connect(){
     if(stopped)return;emit(hadData||attempts?"reconnecting":"connecting");
     try{
-      const protocol=await tradeFactories[exchange](pairs,controller.signal);if(stopped)return;
+      const factory=pairs[0]?.marketType==="futures"&&!["binance","bybit","okx"].includes(exchange)?futuresTrades:tradeFactories[exchange];
+      const protocol=await factory(pairs,controller.signal);if(stopped)return;
       const ws=new WebSocket(protocol.url);socket=ws;ws.binaryType="arraybuffer";lastTransport=Date.now();const openedAt=lastTransport;lastData=0;subscribed=false;let queue=Promise.resolve();
       watch=setInterval(()=>{const health=tradeWatchdog(Date.now(),openedAt,lastData,lastTransport,subscribed);if(health.stale)emit("stale");if(health.close)ws.close();},1000);
       ws.onopen=()=>{if(stopped||socket!==ws)return;options.onConnection?.({connected:true,subscribed:false});subscriptionTimer=setTimeout(()=>{if(stopped||socket!==ws)return;for(const subscription of protocol.subscriptions)send(ws,subscription);},protocol.subscribeDelayMs||0);if(protocol.ping)ping=setInterval(()=>send(ws,protocol.ping),protocol.pingMs||15000);};
@@ -35,7 +37,7 @@ export function subscribeTrades(exchange:ExchangeId,pairs:TradingPair[],options:
         queue=queue.then(async()=>{
           if(stopped||socket!==ws)return;let input:unknown=event.data;
           if(input instanceof ArrayBuffer&&(exchange==="htx"||exchange==="bingx"))input=await new Response(new Blob([input]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
-          if(typeof input==="string"){if(input==="pong"||input==="ping")return;input=JSON.parse(input);}
+          if(typeof input==="string"){if(input==="pong")return;if(input==="ping"||input==="Ping"){send(ws,input==="Ping"?"Pong":"pong");return;}input=JSON.parse(input);}
           if(stopped||socket!==ws)return;const envelope=record(input);
           if(envelope.event==="error"||envelope.type==="error"||envelope.success===false||(typeof envelope.code==="number"&&envelope.code!==0)||(envelope.error&&typeof envelope.error==="object")){ws.close();return;}
           const reply=protocol.reply?.(input);if(reply!==undefined)send(ws,reply);if(!subscribed&&protocol.isSubscribed?.(input)){subscribed=true;options.onConnection?.({connected:true,subscribed:true});}accept(protocol.decode(input));

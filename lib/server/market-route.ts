@@ -4,9 +4,9 @@ import { MarketError } from "@/lib/market/errors";
 import { exchangeQuery } from "@/lib/market/schemas";
 export async function marketRoute<T>(request: Request, run: () => Promise<T>) {
   try {
-    const { exchange } = parseQuery(exchangeQuery, request);
+    const { exchange,marketType } = parseQuery(exchangeQuery, request);
     const data = await run();
-    return Response.json({ data, meta: { exchange, marketType: "spot", fetchedAt: new Date().toISOString() } }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ data, meta: { exchange, marketType, fetchedAt: new Date().toISOString() } }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const known = error instanceof MarketError;
     const invalid = error instanceof z.ZodError;

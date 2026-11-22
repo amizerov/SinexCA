@@ -5,15 +5,15 @@ import {BinanceEndpoints} from "@/lib/market/binance-endpoints";
 // A rate limit or regional restriction on one exchange must not disable the others.
 const blocked = new Map<string, { until: number; error: MarketError }>();
 const binanceEndpoints=new BinanceEndpoints();
-export async function fetchJson(url: URL, method: "GET" | "POST" = "GET"): Promise<unknown> {
-  return method==="GET"?binanceEndpoints.request(url,target=>fetchSingleJson(target,method)):fetchSingleJson(url,method);
+export async function fetchJson(url: URL, method: "GET" | "POST" = "GET",timeoutMs?:number): Promise<unknown> {
+  return method==="GET"?binanceEndpoints.request(url,target=>fetchSingleJson(target,method,timeoutMs)):fetchSingleJson(url,method,timeoutMs);
 }
-async function fetchSingleJson(url:URL,method:"GET"|"POST"):Promise<unknown>{
+async function fetchSingleJson(url:URL,method:"GET"|"POST",timeoutMs?:number):Promise<unknown>{
   const entry = blocked.get(url.origin);
   if (entry && Date.now() < entry.until) throw entry.error;
   blocked.delete(url.origin);
   try {
-    const timeout=url.hostname==="data-api.binance.vision"?4000:10_000;
+    const timeout=timeoutMs??(url.hostname==="data-api.binance.vision"?4000:10_000);
     const response = await fetch(url, { method, signal: AbortSignal.timeout(timeout), cache: "no-store", headers: { Accept: "application/json" } });
     if (!response.ok) {
       const retryAfter = Math.min(3600, Math.max(60, Number(response.headers.get("retry-after")) || 60));

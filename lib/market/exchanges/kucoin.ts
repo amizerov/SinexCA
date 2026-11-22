@@ -15,11 +15,12 @@ export const kucoin = cachedAdapter({
     return extraCandles("kucoin", await request("/api/v1/market/candles", { symbol, type: restInterval("kucoin",timeframe), startAt: String(shiftInterval(endAt,timeframe,-limit-1)), endAt: String(endAt) })).slice(-limit);
   },
 });
-export function getKucoinToken() {
-  return marketCache.get("kucoin:public-token", 300000, async () => {
-    const data = z.object({ token: z.string().min(1), instanceServers: z.array(z.object({ endpoint: z.string().url(), pingInterval: z.number().positive() })).min(1) }).parse(extraData("kucoin", await request("/api/v1/bullet-public", {}, "POST")));
+export function getKucoinToken(marketType:"spot"|"futures"="spot") {
+  return marketCache.get(`kucoin:${marketType}:public-token`, 300000, async () => {
+    const tokenRequest=marketType==="futures"?exchangeRequest("https://api-futures.kucoin.com"):request;
+    const data = z.object({ token: z.string().min(1), instanceServers: z.array(z.object({ endpoint: z.string().url(), pingInterval: z.number().positive() })).min(1) }).parse(extraData("kucoin", await tokenRequest("/api/v1/bullet-public", {}, "POST")));
     const server = data.instanceServers[0], url = new URL(server.endpoint);
-    if (url.protocol !== "wss:" || url.hostname !== "ws-api-spot.kucoin.com") throw new MarketError("UPSTREAM_ERROR", "KuCoin вернул неизвестный адрес потока.");
+    if (url.protocol !== "wss:" || url.hostname !== (marketType==="futures"?"ws-api-futures.kucoin.com":"ws-api-spot.kucoin.com")) throw new MarketError("UPSTREAM_ERROR", "KuCoin вернул неизвестный адрес потока.");
     return { token: data.token, endpoint: server.endpoint, pingInterval: server.pingInterval };
   });
 }

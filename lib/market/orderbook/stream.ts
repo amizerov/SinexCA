@@ -18,7 +18,7 @@ export function subscribeBook(pair:TradingPair,onBook:(book:OrderBook)=>void,onS
       ws.onmessage=event=>{queue=queue.then(async()=>{
         if(stopped||socket!==ws)return;let input:unknown=event.data;
         if(input instanceof ArrayBuffer&&(pair.exchange==="htx"||pair.exchange==="bingx"))input=await new Response(new Blob([input]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
-        if(input==="pong")return;if(input==="ping"){send(ws,"pong");return;}
+        if(input==="pong"||input==="Pong")return;if(input==="ping"||input==="Ping"){send(ws,input==="Ping"?"Pong":"pong");return;}
         if(typeof input==="string")input=JSON.parse(input);
         if(stopped||socket!==ws)return;const envelope=object(input);
         if(envelope.event==="error"||envelope.type==="error"||envelope.success===false||envelope.status==="error"||(typeof envelope.code==="number"&&envelope.code!==0)||envelope.error){ws.close();return;}

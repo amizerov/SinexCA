@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getMarket, isPermanentError } from "@/lib/market/client";
 
 interface Resource<T> { url: string; data?: T; error?: string; loading: boolean }
-export function useMarketResource<T>(url: string | null, pollMs?: number) {
+export function useMarketResource<T>(url: string | null, pollMs?: number,timeoutMs=15000) {
   const [resource, setResource] = useState<Resource<T>>();
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision(r => r + 1), []);
@@ -18,7 +18,7 @@ export function useMarketResource<T>(url: string | null, pollMs?: number) {
       setResource(old => ({ url: url!, data: old?.url === url ? old.data : undefined, error: old?.url === url ? old.error : undefined, loading: true }));
       let retry = true;
       try {
-        const data = await getMarket<T>(url!, controller.signal);
+        const data = await getMarket<T>(url!, controller.signal,timeoutMs);
         failures = 0;
         if (!controller.signal.aborted) setResource({ url: url!, data, loading: false });
       } catch (error) {
@@ -42,7 +42,7 @@ export function useMarketResource<T>(url: string | null, pollMs?: number) {
     window.addEventListener("online", online);
     document.addEventListener("visibilitychange",visibility);
     return () => { controller.abort(); clearTimeout(timer); window.removeEventListener("online", online);document.removeEventListener("visibilitychange",visibility); };
-  }, [url, pollMs, revision]);
+  }, [url, pollMs, revision,timeoutMs]);
   const current = resource?.url === url ? resource : undefined;
   return { data: current?.data, error: current?.error, loading: !!url && (!current || current.loading), refresh };
 }
